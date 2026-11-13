@@ -29,7 +29,9 @@ public partial class MainWindow : Window
     private static readonly string[] VerdictFilterOptions = { "全部", "良品", "不良" };
     private static readonly string[] LogoExtensions = { ".png", ".jpg", ".jpeg", ".bmp" };
     private static readonly string FieldConfigPath = Path.Combine(
-        AppContext.BaseDirectory, "Config", "test-process-fields.json");
+        ResolveConfigRoot(), "Config", "test-process-fields.json");
+    private static readonly string TriggerLogPath = Path.Combine(
+        ResolveConfigRoot(), "Log", "trigger.log");
 
     private static readonly Brush GreenBrush = CreateBrush(0x1A, 0x7F, 0x37);
     private static readonly Brush RedBrush = CreateBrush(0xCF, 0x22, 0x2E);
@@ -47,6 +49,8 @@ public partial class MainWindow : Window
     private readonly ICollectionView _historyView;
     private readonly string _configDirectory;
     private readonly SingleStationTestController _testController;
+    private readonly TriggerSequenceRunner _triggerRunner;
+    private readonly ObservableCollection<TriggerStepVm> _triggerSteps;
 
     private long _lastLogSequence;
     private long _lastHistorySequence;
@@ -107,6 +111,15 @@ public partial class MainWindow : Window
         _testController.Changed += UpdateTestControls;
         UpdateTestControls();
 
+        _triggerSteps = new ObservableCollection<TriggerStepVm>(
+            TriggerSequenceData.Rows.Select(row => new TriggerStepVm(row)));
+        TriggerGrid.ItemsSource = _triggerSteps;
+        TxtTriggerLogPath.Text = "触发日志：" + TriggerLogPath;
+
+        _triggerRunner = new TriggerSequenceRunner();
+        _triggerRunner.Triggered += OnTriggerReceived;
+        _triggerRunner.Start();
+
         NavMonitor.IsChecked = true;
 
         _timer = new DispatcherTimer(
@@ -134,6 +147,55 @@ public partial class MainWindow : Window
     private void OnTestStop(object sender, RoutedEventArgs e) => _testController.Stop();
 
     private void OnTestNext(object sender, RoutedEventArgs e) => _testController.NextStep();
+
+    /// <summary>外部触发到来（后台线程）：切回界面线程执行动作。</summary>
+    private void OnTriggerReceived(TriggerSignal signal) =>
+        Dispatcher.BeginInvoke(() => HandleTrigger(signal));
+
+    private void HandleTrigger(TriggerSignal signal)
+    {
+        if (_closing)
+        {
+            return;
+        }
+
+        var step = _triggerSteps.FirstOrDefault(item => item.Equal == signal.Value) ?? _triggerSteps.FirstOrDefault();
+        step?.MarkTriggered();
+
+        if (signal.Target == "开始测试")
+        {
+            if (_testController.IsRunning)
+            {
+                WriteTriggerLog(signal, "触发，测试进行中已忽略");
+            }
+            else
+            {
+                _testController.Start();
+                WriteTriggerLog(signal, "→ 开始测试");
+            }
+
+            return;
+        }
+
+        WriteTriggerLog(signal, "→ " + signal.Target);
+    }
+
+    /// <summary>触发事件追加写入根目录 Log\trigger.log。</summary>
+    private static void WriteTriggerLog(TriggerSignal signal, string result)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(TriggerLogPath)!);
+            File.AppendAllText(
+                TriggerLogPath,
+                $"{signal.Timestamp:yyyy-MM-dd HH:mm:ss.fff}\tR981={signal.Value}\t{result}{Environment.NewLine}",
+                Encoding.UTF8);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 日志写盘失败不影响触发流程
+        }
+    }
 
     /// <summary>字段配置：勾选决定测试过程列表显示哪些列。</summary>
     private void OnFieldConfig(object sender, RoutedEventArgs e)
@@ -167,6 +229,23 @@ public partial class MainWindow : Window
         }
 
         menu.IsOpen = true;
+    }
+
+    /// <summary>定位程序根目录：向上查找解决方案文件，找不到时退回 exe 所在目录。</summary>
+    private static string ResolveConfigRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "MultiStationDemo.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return AppContext.BaseDirectory;
     }
 
     /// <summary>读取 Config 目录下的字段显示配置（记录被隐藏的列）。</summary>
@@ -387,6 +466,12 @@ public partial class MainWindow : Window
         AppendLogs();
         AppendHistory();
         AppendAlarms();
+
+        var trigger = _triggerRunner.Snapshot();
+        TxtTriggerState.Text = trigger.StateText;
+        TxtTriggerState.Foreground = trigger.StateText == "执行中" ? GreenBrush : MutedBrush;
+        TxtTriggerCount.Text = trigger.TriggerCount.ToString();
+        TxtTriggerLast.Text = trigger.LastTime;
     }
 
     private void AppendLogs()
@@ -758,6 +843,7 @@ public partial class MainWindow : Window
 
         _closing = true;
         _timer.Stop();
+        await _triggerRunner.StopAsync();
         StationList.IsEnabled = false;
         TxtLineState.Text = "正在停机…";
         LineStateDot.Fill = OrangeBrush;

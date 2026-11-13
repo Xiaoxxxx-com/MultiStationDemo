@@ -87,3 +87,25 @@ public static class TestSequenceData
         new("PostSeq", "5", "POST_CAN_RESET", "CAN 通信", "Action", "Num", "初始化CAN通道", "", "", "", "can_zlg_card0", "CHAN=0,CTRL=RESET", "3000", "1", "", "", "T", "T", "CAN 通道复位回初始态（设备保持打开，EndSeq 才彻底断开）"),
     };
 }
+
+/// <summary>测试触发序列中的一行（PCTest测试序列.xlsx 的 TriggerSeq 页签）。</summary>
+public sealed record TriggerSequenceRow(
+    string Number,
+    string Code,
+    string Project,
+    string Kind,
+    string Equal,
+    string Device,
+    string Command,
+    string TimeoutMs,
+    string Target,
+    string Remark);
+
+/// <summary>外部触发序列：独立线程实时监听触发信号。</summary>
+public static class TriggerSequenceData
+{
+    public static readonly TriggerSequenceRow[] Rows =
+    {
+        new("1", "TRIG_R981_START", "PLC 交互", "Test", "10", "plc_inovance_modbus", "COM=MODBUS_TCP,POINT=R981", "2000", "开始测试", "PLC 触发：R981（进站握手字）= 10 → 开始测试（唯一触发条件，F-0247）"),
+    };
+}
