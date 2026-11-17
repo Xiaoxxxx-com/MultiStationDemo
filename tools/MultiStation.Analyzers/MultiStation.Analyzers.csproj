@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>false</EnforceExtendedAnalyzerRules>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>MultiStation.Analyzers</RootNamespace>
+    <AssemblyName>MultiStation.Analyzers</AssemblyName>
+    <!-- RS2008：暂不启用发布跟踪文件；RS1033/RS1037：本地化描述与 CompilationEnd 标记提示 -->
+    <NoWarn>$(NoWarn);RS2008;RS1033;RS1037</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    接入方式（各模块 csproj 中按需添加，默认不全局启用）：
+
+    <ItemGroup>
+      <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\MultiStation.Analyzers\MultiStation.Analyzers.csproj"
+                        OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    建议先在 MultiStation.Contracts 与新增模块上启用，存量代码整改完成后再全局铺开。
+  -->
+
+</Project>

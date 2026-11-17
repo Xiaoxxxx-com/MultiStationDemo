@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\MultiStation.Platform\MultiStation.Platform.Core\MultiStation.Platform.Core.csproj" />
+    <ProjectReference Include="..\..\MultiStation.Platform\MultiStation.Platform.Security\MultiStation.Platform.Security.csproj" />
+    <ProjectReference Include="..\..\MultiStation.Platform\MultiStation.Platform.Simulation\MultiStation.Platform.Simulation.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>
