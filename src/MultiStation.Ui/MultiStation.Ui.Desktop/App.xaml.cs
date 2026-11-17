@@ -62,10 +62,16 @@ public partial class App : Application
                 return;
             }
 
-            // 权限登入：冒烟模式跳过交互，直接以管理员会话运行
+            // 权限登入：冒烟模式跳过交互；调试屏蔽持久化仍在有效期时免登录进入
+            var bypassRestored = PermissionBypass.Restore();
             if (isSmoke)
             {
                 SessionContext.Current = new UserSession("smoke", UserRole.Admin, DateTimeOffset.Now);
+            }
+            else if (bypassRestored)
+            {
+                SessionContext.Current = new UserSession(
+                    SessionContext.DebugBypassUserName, UserRole.Admin, DateTimeOffset.Now);
             }
             else if (!AuthService.HasAnyUser())
             {
@@ -95,6 +101,9 @@ public partial class App : Application
 
             if (isSmoke)
             {
+                // 冒烟自检同样遵守 T-07：启动测试前必须人工确认，未确认则只做界面自检
+                var smokeTestConfirmed = window.ConfirmSmokeTestStart();
+
                 // 冒烟模式：加载窗口并运行 5 秒后优雅停机，用于 CI / 自检
                 var bindingLog = Path.Combine(Path.GetTempPath(), "multistation-binding.log");
                 var listener = new TextWriterTraceListener(bindingLog);
@@ -111,7 +120,10 @@ public partial class App : Application
                     if (tick == 2)
                     {
                         window.TriggerSmokeFault();
-                        window.TriggerSmokeTest();
+                        if (smokeTestConfirmed)
+                        {
+                            window.TriggerSmokeTest();
+                        }
                     }
                     else if (tick == 3)
                     {
@@ -143,7 +155,7 @@ public partial class App : Application
                         {
                             File.WriteAllText(
                                 Path.Combine(temp, "multistation-smoke.txt"),
-                                $"history items={grid.Items.Count}");
+                                $"history items={grid.Items.Count} testStartConfirmed={smokeTestConfirmed}");
                         }
 
                         listener.Flush();

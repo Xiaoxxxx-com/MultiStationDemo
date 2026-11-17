@@ -71,6 +71,12 @@ public partial class MainWindow : Window
         var license = LicenseService.Evaluate();
         Title = $"{Title} · {SessionContext.DisplayName} · 授权剩余 {license.RemainingDays} 天";
 
+        // 免登录调试会话：标题明确标注，配合顶部横幅
+        if (SessionContext.IsDebugBypassSession)
+        {
+            Title += " · 免登录调试";
+        }
+
         var logDirectory = LogPaths.ResolveLogDirectory();
 
         _host = new TestLineHost(logDirectory);
@@ -96,7 +102,7 @@ public partial class MainWindow : Window
 
         _host.AutoFeed = false;
         _host.Start();
-        TxtStatus.Text = "测试线已启动，未自动投料；点击“开始投料”或“手动投料”开始测试";
+        TxtStatus.Text = "测试线已启动，未自动投料、未自动触发；点击「开始」并完成人工确认后进入测试";
 
         _configDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -104,6 +110,7 @@ public partial class MainWindow : Window
         LoadStationName();
         LoadLogo();
         TxtClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        InitBasicInfo();
 
         _testController = new SingleStationTestController();
         StepGrid.ItemsSource = _testController.Steps;
@@ -120,7 +127,14 @@ public partial class MainWindow : Window
 
         _triggerRunner = new TriggerSequenceRunner();
         _triggerRunner.Triggered += OnTriggerReceived;
-        _triggerRunner.Start();
+
+        // 模拟外部触发默认关闭：测试只能由人工点击「开始」并经确认后进入
+        // 需要演示 PLC 握手时可显式设置 MULTISTATION_ENABLE_TRIGGER=1 开启
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("MULTISTATION_ENABLE_TRIGGER"), "1", StringComparison.Ordinal))
+        {
+            _triggerRunner.Start();
+        }
 
         NavMonitor.IsChecked = true;
 
@@ -140,11 +154,16 @@ public partial class MainWindow : Window
 
     internal void TriggerSmokeTest() => _testController.Start();
 
+    /// <summary>冒烟自检启动测试前的人工确认（T-07 同样适用于冒烟测试）。</summary>
+    internal bool ConfirmSmokeTestStart() => ConfirmTestStart("冒烟自检");
+
     private void OnTick(object? sender, EventArgs e) => UpdateUi();
 
     private void OnTestStart(object sender, RoutedEventArgs e)
     {
         if (!RequirePermission(Permission.Operate)) return;
+        if (!ConfirmTestStart("手动开始")) return;
+        StartNewUnitInfo();
         _testController.Start();
     }
 
@@ -163,13 +182,57 @@ public partial class MainWindow : Window
     private void OnTestNext(object sender, RoutedEventArgs e)
     {
         if (!RequirePermission(Permission.Operate)) return;
+        if (!_testController.IsRunning)
+        {
+            if (!ConfirmTestStart("单步执行")) return;
+            StartNewUnitInfo();
+        }
+
         _testController.NextStep();
     }
 
-    /// <summary>权限校验：不满足时提示并拒绝执行，返回 false。</summary>
+    /// <summary>人工确认：每次进入测试前必须由现场人员确认，未确认不得开始。</summary>
+    private bool ConfirmTestStart(string source)
+    {
+        var confirmed = MessageBox.Show(
+            this,
+            $"即将开始测试（来源：{source}）。\n\n请确认：现场已清场、工件与治具就位、安全门已关闭。\n\n是否开始？",
+            $"人工确认 · {source}",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+        TxtStatus.Text = confirmed
+            ? $"测试已开始（已通过人工确认，来源：{source}）"
+            : $"测试未开始：未通过人工确认（来源：{source}）";
+
+        return confirmed;
+    }
+
+    /// <summary>基础信息：初始化工单 / 配方 / 操作员；SN 与 CarrierID 待测试开始时生成。</summary>
+    private void InitBasicInfo() =>
+        ApplyBasicInfo(BasicUnitInfo.Initial(DateTime.Now, CurrentRecipeText(), SessionContext.DisplayName));
+
+    /// <summary>测试开始：生成本件 SN 与 CarrierID，并刷新基础信息区。</summary>
+    private void StartNewUnitInfo() =>
+        ApplyBasicInfo(BasicUnitInfo.ForNewUnit(DateTime.Now, CurrentRecipeText(), SessionContext.DisplayName));
+
+    private string CurrentRecipeText() => BasicUnitInfo.MapRecipe(RecipeB.IsChecked == true);
+
+    private void ApplyBasicInfo(BasicUnitInfo info)
+    {
+        TxtInfoSn.Text = info.Sn;
+        TxtInfoCarrier.Text = info.CarrierId;
+        TxtInfoWorkOrder.Text = info.WorkOrder;
+        TxtInfoRecipe.Text = info.Recipe;
+        TxtInfoOperator.Text = info.Operator;
+        TxtInfoStartedAt.Text = info.StartedAt;
+    }
+
+    /// <summary>权限校验：不满足时提示并拒绝执行，返回 false。调试屏蔽期内一律放行。</summary>
     private bool RequirePermission(Permission permission)
     {
-        if (SessionContext.Has(permission))
+        if (SessionContext.Has(permission) || PermissionBypass.IsActive)
         {
             return true;
         }
@@ -181,6 +244,42 @@ public partial class MainWindow : Window
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
         return false;
+    }
+
+    /// <summary>调试屏蔽：仅管理员可用，用于临时跳过权限校验。</summary>
+    private void OnOpenDebugBypass(object sender, RoutedEventArgs e)
+    {
+        if (SessionContext.Current?.Role != UserRole.Admin)
+        {
+            MessageBox.Show(
+                this,
+                $"调试屏蔽仅限管理员使用，当前账号「{SessionContext.DisplayName}」无权限。",
+                "权限不足",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var dialog = new DebugBypassWindow { Owner = this };
+        dialog.ShowDialog();
+        RefreshBypassState();
+    }
+
+    /// <summary>刷新顶部调试屏蔽状态：横幅、剩余时间与按钮文案。</summary>
+    private void RefreshBypassState()
+    {
+        var text = PermissionBypass.StateText;
+        TxtBypassState.Text = text ?? string.Empty;
+        BtnDebugBypass.Content = text is null ? "调试屏蔽" : "屏蔽中";
+        BtnDebugBypass.Foreground = text is null ? MutedBrush : OrangeBrush;
+
+        BypassBanner.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+        if (text is not null)
+        {
+            var loginNote = SessionContext.IsDebugBypassSession ? "免登录、" : string.Empty;
+            TxtBypassBanner.Text =
+                $"{text}：{loginNote}权限校验已放行；原因：{PermissionBypass.Reason}。调试结束后请及时关闭。";
+        }
     }
 
     /// <summary>外部触发到来（后台线程）：切回界面线程执行动作。</summary>
@@ -203,8 +302,13 @@ public partial class MainWindow : Window
             {
                 WriteTriggerLog(signal, "触发，测试进行中已忽略");
             }
+            else if (!ConfirmTestStart("外部触发 R981"))
+            {
+                WriteTriggerLog(signal, "触发，未通过人工确认，已忽略");
+            }
             else
             {
+                StartNewUnitInfo();
                 _testController.Start();
                 WriteTriggerLog(signal, "→ 开始测试");
             }
@@ -458,6 +562,8 @@ public partial class MainWindow : Window
     private void UpdateUi()
     {
         TxtClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        PermissionBypass.Refresh();
+        RefreshBypassState();
 
         var metrics = _host.Metrics;
         TxtSubmitted.Text = metrics.Submitted.ToString();
@@ -738,6 +844,12 @@ public partial class MainWindow : Window
 
     private void OnToggleFeed(object sender, RoutedEventArgs e)
     {
+        // 开始投料即进入连续测试，必须先经人工确认；暂停不需要
+        if (!_host.AutoFeed && !ConfirmTestStart("开始自动投料"))
+        {
+            return;
+        }
+
         _host.AutoFeed = !_host.AutoFeed;
         BtnFeedPause.Content = _host.AutoFeed ? "暂停投料" : "开始投料";
         TxtStatus.Text = _host.AutoFeed
@@ -748,6 +860,7 @@ public partial class MainWindow : Window
     private void OnFeed(object sender, RoutedEventArgs e)
     {
         if (!RequirePermission(Permission.Operate)) return;
+        if (!ConfirmTestStart("手动投料")) return;
 
         var recipe = RecipeB.IsChecked == true ? "B" : "A";
         _host.Submit(recipe);

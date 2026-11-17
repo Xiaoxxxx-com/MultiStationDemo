@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\MultiStation.Platform\MultiStation.Platform.Core\MultiStation.Platform.Core.csproj" />
     <ProjectReference Include="..\..\src\MultiStation.Platform\MultiStation.Platform.Security\MultiStation.Platform.Security.csproj" />
   </ItemGroup>
 

@@ -231,11 +231,19 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="4*" />
         </Grid.RowDefinitions>
 
+        <!-- 调试权限屏蔽横幅：仅屏蔽生效时显示 -->
+        <Border x:Name="BypassBanner" Grid.Row="0" Background="#FEF3C7" BorderBrush="#F59E0B"
+                BorderThickness="0,0,0,1" Padding="24,8" Visibility="Collapsed">
+            <TextBlock x:Name="TxtBypassBanner" Foreground="#92400E" FontSize="13" FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+        </Border>
+
         <!-- 顶部菜单栏 -->
-        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
             <Grid Margin="12,2,16,2">
                 <Menu Background="Transparent" Foreground="#1F2937" HorizontalAlignment="Left">
                     <MenuItem Header="窗口">
@@ -243,13 +251,19 @@
                         <MenuItem Header="报警中心" Click="OnOpenAlarmsWindow" />
                     </MenuItem>
                 </Menu>
-                <TextBlock x:Name="TxtClock" Text="--:--:--" HorizontalAlignment="Right" VerticalAlignment="Center"
-                           FontFamily="Consolas" FontSize="13" Foreground="{StaticResource MutedBrush}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtBypassState" Text="" Margin="0,0,10,0" FontSize="12"
+                               Foreground="#9A6700" VerticalAlignment="Center" />
+                    <Button x:Name="BtnDebugBypass" Content="调试屏蔽" Click="OnOpenDebugBypass"
+                            Style="{StaticResource SmallGhostButton}" />
+                    <TextBlock x:Name="TxtClock" Text="--:--:--" Margin="12,0,0,0" VerticalAlignment="Center"
+                               FontFamily="Consolas" FontSize="13" Foreground="{StaticResource MutedBrush}" />
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- 工站信息区：Logo 与标题融合，中间竖线分隔 -->
-        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
+        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,10">
                 <Border Width="150" Height="44" Background="Transparent" Cursor="Hand"
                         MouseLeftButtonUp="OnImportLogo"
@@ -271,7 +285,7 @@
         </Border>
 
         <!-- 主体 -->
-        <Grid Grid.Row="2" Margin="24,14,24,12">
+        <Grid Grid.Row="3" Margin="24,14,24,12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -314,16 +328,69 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <Grid Margin="2,0,2,8">
+                            <!-- 基础信息：SN / CarrierID 等，供现场核对当前测试对象 -->
+                            <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1"
+                                    CornerRadius="6" Padding="8,6" Margin="0,0,0,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="基础信息"
+                                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4" />
+
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,6,4">
+                                        <TextBlock Text="SN" Style="{StaticResource StatLabel}" />
+                                        <TextBlock x:Name="TxtInfoSn" Text="-" FontSize="13" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="6,0,0,4">
+                                        <TextBlock Text="CarrierID" Style="{StaticResource StatLabel}" />
+                                        <TextBlock x:Name="TxtInfoCarrier" Text="-" FontSize="13" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,6,4">
+                                        <TextBlock Text="工单" Style="{StaticResource StatLabel}" />
+                                        <TextBlock x:Name="TxtInfoWorkOrder" Text="-" FontSize="13"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="6,0,0,4">
+                                        <TextBlock Text="配方" Style="{StaticResource StatLabel}" />
+                                        <TextBlock x:Name="TxtInfoRecipe" Text="-" FontSize="13"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,6,0">
+                                        <TextBlock Text="操作员" Style="{StaticResource StatLabel}" />
+                                        <TextBlock x:Name="TxtInfoOperator" Text="-" FontSize="13"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="3" Grid.Column="1" Margin="6,0,0,0">
+                                        <TextBlock Text="开始时间" Style="{StaticResource StatLabel}" />
+                                        <TextBlock x:Name="TxtInfoStartedAt" Text="-" FontSize="13" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="1" Margin="2,0,2,8">
                                 <TextBlock Text="测试触发序列" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <TextBlock x:Name="TxtTriggerState" Text="等待外部触发"
                                            Foreground="{StaticResource MutedBrush}" FontSize="11"
                                            HorizontalAlignment="Right" VerticalAlignment="Center" />
                             </Grid>
 
-                            <Grid Grid.Row="1" Margin="2,0,2,10">
+                            <Grid Grid.Row="2" Margin="2,0,2,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
@@ -339,7 +406,7 @@
                                 </StackPanel>
                             </Grid>
 
-                            <DataGrid x:Name="TriggerGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True"
+                            <DataGrid x:Name="TriggerGrid" Grid.Row="3" AutoGenerateColumns="False" IsReadOnly="True"
                                       CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="None"
                                       Background="Transparent" BorderThickness="0" RowBackground="Transparent"
                                       AlternationCount="2" SelectionMode="Single" SelectionUnit="FullRow"
@@ -359,7 +426,7 @@
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <TextBlock x:Name="TxtTriggerLogPath" Grid.Row="3" Margin="2,12,2,0"
+                            <TextBlock x:Name="TxtTriggerLogPath" Grid.Row="4" Margin="2,12,2,0"
                                        TextWrapping="Wrap" FontSize="11" Foreground="#94A3B8" />
                         </Grid>
                     </Border>

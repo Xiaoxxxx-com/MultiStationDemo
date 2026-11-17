@@ -1,8 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Threading;
+using MultiStation.Platform.Core.Execution;
 
 namespace MultiStation.Ui.Desktop;
 
@@ -86,6 +88,9 @@ public sealed class TestStepVm : INotifyPropertyChanged
 
     /// <summary>标题 / TestProject 行只做分组，不参与实际测试判定。</summary>
     public bool IsGroup => Kind is "标题" or "TestProject";
+
+    /// <summary>Bat 步骤：调用外部批处理，退出码 0 判 PASS。</summary>
+    public bool IsBat => string.Equals(Kind, "Bat", StringComparison.OrdinalIgnoreCase);
 
     public string Measured
     {
@@ -261,15 +266,21 @@ public sealed class ParameterVm : INotifyPropertyChanged
 public sealed class SingleStationTestController
 {
     private readonly DispatcherTimer _timer;
+    private readonly Dispatcher _dispatcher;
     private readonly Random _random = new();
     private int _current = -1;
     private bool _running;
     private bool _paused;
     private bool _stepMode;
     private bool _hasNg;
+    private int _session;
+    private CancellationTokenSource? _batCts;
+    private bool _batRunning;
+    private bool _stepCommitted;
 
     public SingleStationTestController()
     {
+        _dispatcher = Dispatcher.CurrentDispatcher;
         Steps = new ObservableCollection<TestStepVm>(TestSequenceData.Rows.Select(row => new TestStepVm(row)));
 
         Parameters = new ObservableCollection<ParameterVm>
@@ -373,9 +384,12 @@ public sealed class SingleStationTestController
         }
 
         _timer.Stop();
+        CancelBat();
         _running = false;
         _paused = false;
         _stepMode = false;
+        _stepCommitted = false;
+        _session++;
 
         if (_current >= 0 && _current < Steps.Count)
         {
@@ -430,7 +444,13 @@ public sealed class SingleStationTestController
             return;
         }
 
-        if (_current >= 0 && _current < Steps.Count)
+        // Bat 步骤在后台执行，完成前不推进序列
+        if (_batRunning)
+        {
+            return;
+        }
+
+        if (_current >= 0 && _current < Steps.Count && !_stepCommitted)
         {
             CompleteStep(_current);
         }
@@ -443,6 +463,7 @@ public sealed class SingleStationTestController
         }
 
         _current = next;
+        _stepCommitted = false;
         MarkStepEntered(next);
         Changed?.Invoke();
     }
@@ -453,6 +474,12 @@ public sealed class SingleStationTestController
         if (step.IsGroup)
         {
             step.MarkGroup();
+            return;
+        }
+
+        // Bat 步骤的结果由批处理回调写入，这里不参与随机模拟
+        if (step.IsBat)
+        {
             return;
         }
 
@@ -482,6 +509,162 @@ public sealed class SingleStationTestController
 
         step.MarkRunning();
         AddLog($"步骤 {index + 1} {step.Project} 开始");
+
+        if (step.IsBat)
+        {
+            BeginBat(index, step);
+        }
+    }
+
+    /// <summary>启动 Bat 步骤：后台执行，完成后回到界面线程写结果。</summary>
+    private void BeginBat(int index, TestStepVm step)
+    {
+        var (file, arguments, workDirectory) = ParseBatCommand(step.Command);
+        var timeoutMs = int.TryParse(step.TimeoutMs, out var parsed) && parsed > 0
+            ? parsed
+            : BatRunner.DefaultTimeoutMs;
+
+        _stepCommitted = false;
+        _batRunning = true;
+        _batCts = new CancellationTokenSource();
+
+        var session = _session;
+        var token = _batCts.Token;
+        var displayArgs = string.IsNullOrWhiteSpace(arguments) ? string.Empty : " " + arguments;
+        AddLog($"步骤 {index + 1} 调用批处理 {file}{displayArgs}（超时 {timeoutMs} ms）");
+
+        _ = RunBatAsync(index, step, session, file, arguments, workDirectory, timeoutMs, token);
+    }
+
+    private async Task RunBatAsync(
+        int index,
+        TestStepVm step,
+        int session,
+        string file,
+        string? arguments,
+        string? workDirectory,
+        int timeoutMs,
+        CancellationToken token)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        BatResult result;
+        try
+        {
+            result = await BatRunner.RunAsync(file, arguments, workDirectory, timeoutMs, token)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            result = new BatResult(false, -1, false, string.Empty, string.Empty, $"执行异常：{ex.Message}");
+        }
+
+        stopwatch.Stop();
+        _ = _dispatcher.BeginInvoke(() => OnBatCompleted(
+            index, step, session, result, stopwatch.Elapsed.TotalMilliseconds));
+    }
+
+    private void OnBatCompleted(
+        int index,
+        TestStepVm step,
+        int session,
+        BatResult result,
+        double elapsedMs)
+    {
+        if (session != _session || !_running || index != _current)
+        {
+            return;
+        }
+
+        _batRunning = false;
+        _batCts?.Dispose();
+        _batCts = null;
+
+        var measured = !result.Started
+            ? "启动失败"
+            : result.TimedOut
+                ? "超时"
+                : $"exit={result.ExitCode}";
+
+        step.Complete(result.Passed, measured, elapsedMs);
+        AddLog($"步骤 {index + 1} {step.Project} {(result.Passed ? "PASS" : "NG")} · {measured} · {elapsedMs:F0} ms · {result.Message}");
+
+        foreach (var line in Tail(result.StandardOutput, result.StandardError))
+        {
+            AddLog($"[bat] {line}");
+        }
+
+        if (!result.Passed)
+        {
+            _hasNg = true;
+        }
+
+        _stepCommitted = true;
+        Changed?.Invoke();
+    }
+
+    /// <summary>截取脚本文本输出的前若干行，避免刷屏。</summary>
+    private static IEnumerable<string> Tail(string standardOutput, string standardError)
+    {
+        const int maxLines = 8;
+        var lines = (standardOutput + Environment.NewLine + standardError)
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .Take(maxLines)
+            .ToArray();
+
+        return lines;
+    }
+
+    /// <summary>解析 Bat 步骤命令：FILE=脚本,ARGS=参数,WORKDIR=工作目录。</summary>
+    private static (string File, string? Arguments, string? WorkDirectory) ParseBatCommand(string command)
+    {
+        string? file = null;
+        string? arguments = null;
+        string? workDirectory = null;
+
+        foreach (var segment in command.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = segment.IndexOf('=');
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var key = segment[..separator].Trim();
+            var value = segment[(separator + 1)..].Trim();
+
+            switch (key.ToUpperInvariant())
+            {
+                case "FILE":
+                    file = value;
+                    break;
+                case "ARGS":
+                    arguments = value;
+                    break;
+                case "WORKDIR":
+                    workDirectory = value;
+                    break;
+            }
+        }
+
+        return (file ?? string.Empty, arguments, workDirectory);
+    }
+
+    private void CancelBat()
+    {
+        try
+        {
+            _batCts?.Cancel();
+        }
+        catch (Exception)
+        {
+            // 已释放或已取消
+        }
+
+        _batCts?.Dispose();
+        _batCts = null;
+        _batRunning = false;
     }
 
     private string BuildMeasured(TestStepVm step, bool passed)
@@ -524,9 +707,12 @@ public sealed class SingleStationTestController
     private void FinishSession()
     {
         _timer.Stop();
+        CancelBat();
         _running = false;
         _paused = false;
         _stepMode = false;
+        _stepCommitted = false;
+        _session++;
         _current = -1;
 
         if (_hasNg)
@@ -549,8 +735,11 @@ public sealed class SingleStationTestController
     private void ResetSession()
     {
         _timer.Stop();
+        CancelBat();
         _current = -1;
         _hasNg = false;
+        _stepCommitted = false;
+        _session++;
         Logs.Clear();
 
         foreach (var step in Steps)

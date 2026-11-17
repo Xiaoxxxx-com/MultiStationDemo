@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>MultiStation.Ui.UnitTests</AssemblyName>
+    <RootNamespace>MultiStation.Ui.UnitTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MultiStation.Ui\MultiStation.Ui.Desktop\MultiStation.Ui.Desktop.csproj" />
+  </ItemGroup>
+
+</Project>

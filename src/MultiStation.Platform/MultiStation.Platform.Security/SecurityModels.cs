@@ -79,9 +79,15 @@ public sealed record UserSession(string UserName, UserRole Role, DateTimeOffset 
 /// <summary>当前登录会话的全局访问点，由启动流程写入。</summary>
 public static class SessionContext
 {
+    /// <summary>调试屏蔽免登录会话的显示名。</summary>
+    public const string DebugBypassUserName = "调试屏蔽";
+
     public static UserSession? Current { get; set; }
 
     public static bool Has(Permission permission) => Current?.Can(permission) == true;
 
     public static string DisplayName => Current?.DisplayName ?? "未登录";
+
+    /// <summary>当前是否为调试屏蔽免登录会话。</summary>
+    public static bool IsDebugBypassSession => Current?.UserName == DebugBypassUserName;
 }

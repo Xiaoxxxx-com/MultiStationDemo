@@ -1,0 +1,59 @@
+<Window x:Class="MultiStation.Ui.Desktop.DebugBypassWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="调试 · 权限限时屏蔽"
+        Width="460" Height="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="ToolWindow"
+        Background="#F4F6FA" Foreground="#1F2937"
+        FontFamily="Microsoft YaHei UI" FontSize="13">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="权限限时屏蔽（调试）" FontSize="18" FontWeight="Bold" Margin="0,0,0,4" />
+        <TextBlock Grid.Row="1" x:Name="TxtBypassState" Foreground="#9A6700" FontSize="12"
+                   Margin="0,0,0,16" TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="2">
+            <TextBlock Text="屏蔽时长（最长 90 天，月按 30 天折算）" Foreground="#6B7280" FontSize="11" Margin="0,0,0,4" />
+            <StackPanel Orientation="Horizontal">
+                <TextBox x:Name="TxtBypassMinutes" Width="110" Height="32" Padding="8,4"
+                         VerticalContentAlignment="Center" Text="15" />
+                <ComboBox x:Name="CmbBypassUnit" Width="100" Height="32" Margin="8,0,0,0" SelectedIndex="0">
+                    <ComboBoxItem Content="分钟" />
+                    <ComboBoxItem Content="小时" />
+                    <ComboBoxItem Content="天" />
+                    <ComboBoxItem Content="周" />
+                    <ComboBoxItem Content="月" />
+                </ComboBox>
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock Text="屏蔽原因（必填，写入审计）" Foreground="#6B7280" FontSize="11" Margin="0,0,0,4" />
+            <TextBox x:Name="TxtBypassReason" Height="32" Padding="8,4" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Margin="0,12,0,0">
+            <TextBlock x:Name="TxtBypassError" Foreground="#DC2626" FontSize="12" TextWrapping="Wrap" />
+            <TextBlock Text="仅屏蔽权限校验：登录与调试入口仍需管理员；到期自动恢复，开启 / 关闭 / 到期写入 debug-bypass.log。时长支持分钟 / 小时 / 天 / 周 / 月，单次最长 90 天。"
+                       Foreground="#6B7280" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnBypassClose" Content="取消" Width="88" Height="32" Margin="0,0,8,0" Click="OnClose" />
+            <Button x:Name="BtnDisableBypass" Content="关闭屏蔽" Width="96" Height="32" Margin="0,0,8,0" Click="OnDisable" />
+            <Button x:Name="BtnEnableBypass" Content="开启屏蔽" Width="96" Height="32" IsDefault="True" Click="OnEnable"
+                    Background="#2563EB" Foreground="White" BorderThickness="0" />
+        </StackPanel>
+    </Grid>
+</Window>

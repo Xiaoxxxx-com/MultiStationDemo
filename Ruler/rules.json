@@ -1,7 +1,7 @@
 {
-    "version":  "1.3",
-    "updatedAt":  "2026-11-15",
-    "total":  105,
+    "version":  "1.5",
+    "updatedAt":  "2026-11-17",
+    "total":  107,
     "categories":  [
                        {
                            "name":  "目录与命名",
@@ -21,12 +21,12 @@
                        {
                            "name":  "测试模块",
                            "prefix":  "T",
-                           "count":  6
+                           "count":  7
                        },
                        {
                            "name":  "脚本校验",
                            "prefix":  "V",
-                           "count":  15
+                           "count":  16
                        },
                        {
                            "name":  "质量与验收",
@@ -604,6 +604,14 @@
                       "severity":  "强制"
                   },
                   {
+                      "id":  "T-07",
+                      "category":  "测试模块",
+                      "source":  "04_测试模块规则.md",
+                      "title":  "每次进入测试必须人工确认",
+                      "detail":  "手动开始、单步、外部触发、投料全部入口均须现场确认后才可进入测试；未确认不得开始，取消需留痕；--smoke 冒烟自检同样需要确认",
+                      "severity":  "阻断"
+                  },
+                  {
                       "id":  "V-01",
                       "category":  "脚本校验",
                       "source":  "04_测试模块规则.md",
@@ -722,6 +730,14 @@
                       "title":  "Start 缺少仪器连通性检查",
                       "detail":  "告警",
                       "severity":  "强制"
+                  },
+                  {
+                      "id":  "V-16",
+                      "category":  "脚本校验",
+                      "source":  "04_测试模块规则.md",
+                      "title":  "Bat 步骤必须配置 FILE=，脚本存在且为 .bat/.cmd，超时 > 0，ARGS 不含逗号",
+                      "detail":  "语法 `FILE=脚本路径,ARGS=参数,WORKDIR=工作目录`；退出码 0 判 Pass，非 0/启动失败/超时判 Fail",
+                      "severity":  "阻断"
                   },
                   {
                       "id":  "Q-01",

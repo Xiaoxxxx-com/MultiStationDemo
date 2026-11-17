@@ -19,13 +19,19 @@ internal sealed class UiDriver : IDisposable
     /// <summary>等待进程退出，返回是否在超时内退出。</summary>
     public bool WaitForExit(int timeoutMs) => _process.WaitForExit(timeoutMs);
 
-    public static UiDriver Launch(string exePath, string securityDir)
+    public static UiDriver Launch(string exePath, string securityDir, params string[] arguments)
     {
         var info = new ProcessStartInfo(exePath)
         {
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(exePath)!
         };
+
+        foreach (var argument in arguments)
+        {
+            info.ArgumentList.Add(argument);
+        }
+
         info.Environment["MULTISTATION_SECURITY_DIR"] = securityDir;
 
         var process = Process.Start(info) ?? throw new InvalidOperationException("进程启动失败");
@@ -44,10 +50,55 @@ internal sealed class UiDriver : IDisposable
 
             foreach (AutomationElement element in AutomationElement.RootElement.FindAll(TreeScope.Children, condition))
             {
-                if (element.Current.Name.Contains(titlePart, StringComparison.Ordinal))
+                try
                 {
-                    return element;
+                    if (element.Current.Name.Contains(titlePart, StringComparison.Ordinal))
+                    {
+                        return element;
+                    }
                 }
+                catch (ElementNotAvailableException)
+                {
+                    // 遍历过程中窗口恰好关闭，跳过该元素
+                }
+            }
+
+            Thread.Sleep(200);
+        }
+
+        return null;
+    }
+
+    /// <summary>等待属于本进程的顶层窗口（含 Owner 关联的模态子窗口，按子树搜索）。</summary>
+    public AutomationElement? WaitOwnedWindow(string titlePart, int timeoutMs = 15000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var condition = new AndCondition(
+            new PropertyCondition(AutomationElement.ProcessIdProperty, _process.Id),
+            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Window));
+
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                foreach (AutomationElement element in AutomationElement.RootElement.FindAll(TreeScope.Subtree, condition))
+                {
+                    try
+                    {
+                        if (element.Current.Name.Contains(titlePart, StringComparison.Ordinal))
+                        {
+                            return element;
+                        }
+                    }
+                    catch (ElementNotAvailableException)
+                    {
+                        // 遍历过程中窗口恰好关闭，跳过该元素
+                    }
+                }
+            }
+            catch (ElementNotAvailableException)
+            {
+                // 窗口正在创建或销毁，继续轮询
             }
 
             Thread.Sleep(200);
