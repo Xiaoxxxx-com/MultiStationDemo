@@ -149,6 +149,17 @@
             <Setter Property="ToolTip" Value="按工件号搜索" />
         </Style>
 
+        <!-- 基础信息输入框：白色底细边框，可直接编辑 -->
+        <Style x:Key="InfoInput" TargetType="TextBox">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="CaretBrush" Value="#2563EB" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
         <Style x:Key="LogItemStyle" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="4,1" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -262,26 +273,44 @@
             </Grid>
         </Border>
 
-        <!-- 工站信息区：Logo 与标题融合，中间竖线分隔 -->
+        <!-- 工站信息区：Logo 与标题融合，右侧为机种切换与 ECU 烧录入口 -->
         <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="24,10">
-                <Border Width="150" Height="44" Background="Transparent" Cursor="Hand"
-                        MouseLeftButtonUp="OnImportLogo"
-                        ToolTip="点击导入工厂 Logo（png/jpg/jpeg/bmp）">
-                    <Grid>
-                        <Image x:Name="ImgLogo" Stretch="Uniform" />
-                        <TextBlock x:Name="TxtLogoHint" Text="点击导入工厂 Logo"
-                                   Foreground="#94A3B8" FontSize="11"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
+            <Grid Margin="24,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                <Border Width="1" Height="28" Background="#D7DFEA" Margin="18,0" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="150" Height="44" Background="Transparent" Cursor="Hand"
+                            MouseLeftButtonUp="OnImportLogo"
+                            ToolTip="点击导入工厂 Logo（png/jpg/jpeg/bmp）">
+                        <Grid>
+                            <Image x:Name="ImgLogo" Stretch="Uniform" />
+                            <TextBlock x:Name="TxtLogoHint" Text="点击导入工厂 Logo"
+                                       Foreground="#94A3B8" FontSize="11"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
 
-                <TextBlock x:Name="TxtStationName" Text="MTCU老化测试"
-                           FontSize="28" FontWeight="Bold" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-            </StackPanel>
+                    <Border Width="1" Height="28" Background="#D7DFEA" Margin="18,0" />
+
+                    <TextBlock x:Name="TxtStationName" Text="MTCU老化测试"
+                               FontSize="28" FontWeight="Bold" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="当前机种" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                               VerticalAlignment="Center" />
+                    <TextBlock x:Name="TxtModelName" Text="-" FontWeight="SemiBold" FontSize="14"
+                               VerticalAlignment="Center" Margin="6,0,12,0" />
+                    <Button x:Name="BtnModelSwitch" Content="机种切换" Click="OnSwitchModel"
+                            Style="{StaticResource SmallGhostButton}" />
+                    <Button x:Name="BtnFlashTest" Content="ECU 烧录" Click="OnOpenFlashTest"
+                            Style="{StaticResource SmallGhostButton}" />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- 主体 -->
@@ -344,41 +373,43 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="基础信息"
-                                               FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4" />
+                                    <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,4">
+                                        <TextBlock Text="基础信息" FontWeight="SemiBold" FontSize="12"
+                                                   VerticalAlignment="Center" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock x:Name="TxtBasicInfoState" Text="使用中" Foreground="#6B7280"
+                                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <Button x:Name="BtnBasicInfo" Content="选择基础信息"
+                                                    Style="{StaticResource SmallGhostButton}" Click="OnSelectBasicInfo" />
+                                        </StackPanel>
+                                    </Grid>
 
-                                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,6,4">
+                                    <StackPanel x:Name="PnlInfoSn" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,0,4">
                                         <TextBlock Text="SN" Style="{StaticResource StatLabel}" />
-                                        <TextBlock x:Name="TxtInfoSn" Text="-" FontSize="13" FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="6,0,0,4">
-                                        <TextBlock Text="CarrierID" Style="{StaticResource StatLabel}" />
-                                        <TextBlock x:Name="TxtInfoCarrier" Text="-" FontSize="13" FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBox x:Name="TxtInfoSn" Text="-" Style="{StaticResource InfoInput}"
+                                                 FontWeight="SemiBold" ToolTip="可手工输入，留空或为 - 时测试开始自动生成" />
                                     </StackPanel>
 
-                                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,6,4">
-                                        <TextBlock Text="工单" Style="{StaticResource StatLabel}" />
-                                        <TextBlock x:Name="TxtInfoWorkOrder" Text="-" FontSize="13"
-                                                   TextTrimming="CharacterEllipsis" />
+                                    <StackPanel x:Name="PnlInfoCarrier" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,0,0,4">
+                                        <TextBlock Text="CarrierID" Style="{StaticResource StatLabel}" />
+                                        <TextBox x:Name="TxtInfoCarrier" Text="-" Style="{StaticResource InfoInput}"
+                                                 FontWeight="SemiBold" ToolTip="可手工输入，留空或为 - 时测试开始自动生成" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="6,0,0,4">
+
+                                    <StackPanel x:Name="PnlInfoShellCode" Grid.Row="3" Grid.ColumnSpan="2" Margin="0,0,0,4">
+                                        <TextBlock Text="壳体码" Style="{StaticResource StatLabel}" />
+                                        <TextBox x:Name="TxtInfoShellCode" Text="-" Style="{StaticResource InfoInput}"
+                                                 ToolTip="壳体码仅手工输入，不自动生成" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="4" Grid.ColumnSpan="2">
                                         <TextBlock Text="配方" Style="{StaticResource StatLabel}" />
                                         <TextBlock x:Name="TxtInfoRecipe" Text="-" FontSize="13"
                                                    TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-
-                                    <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,6,0">
-                                        <TextBlock Text="操作员" Style="{StaticResource StatLabel}" />
-                                        <TextBlock x:Name="TxtInfoOperator" Text="-" FontSize="13"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Row="3" Grid.Column="1" Margin="6,0,0,0">
-                                        <TextBlock Text="开始时间" Style="{StaticResource StatLabel}" />
-                                        <TextBlock x:Name="TxtInfoStartedAt" Text="-" FontSize="13" />
                                     </StackPanel>
                                 </Grid>
                             </Border>

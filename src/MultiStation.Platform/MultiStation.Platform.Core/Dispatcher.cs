@@ -7,7 +7,7 @@ namespace MultiStation.Platform.Core;
 /// 调度器：只决定工件进入哪个工位的输入队列，以及完成后路由到下游。
 /// 所有路由事件在单个异步循环中串行处理，因此路由状态不需要任何锁。
 /// </summary>
-public sealed class Dispatcher
+public sealed class Dispatcher(IAppLog log, Action<WorkItem>? onFinished = null) : IDisposable
 {
     private readonly Channel<DispatchEvent> _events = Channel.CreateUnbounded<DispatchEvent>(new UnboundedChannelOptions
     {
@@ -22,8 +22,8 @@ public sealed class Dispatcher
     private readonly Dictionary<string, StationRuntime> _stations = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RecipeDefinition> _recipes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, WorkProgress> _progress = new(StringComparer.OrdinalIgnoreCase);
-    private readonly IAppLog _log;
-    private readonly Action<WorkItem>? _onFinished;
+    private readonly IAppLog _log = log;
+    private readonly Action<WorkItem>? _onFinished = onFinished;
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
@@ -32,12 +32,6 @@ public sealed class Dispatcher
     private long _passed;
     private long _failed;
     private long _inProcess;
-
-    public Dispatcher(IAppLog log, Action<WorkItem>? onFinished = null)
-    {
-        _log = log;
-        _onFinished = onFinished;
-    }
 
     public Func<StationCompletion, ValueTask> CompletionSink => completion =>
     {
@@ -81,6 +75,9 @@ public sealed class Dispatcher
         _finishedLoop = Task.Run(DrainFinishedAsync);
     }
 
+    /// <summary>释放资源：停止调度器。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
+
     /// <summary>先停调度器（不再接收新工件），再由上层逐个停止工位。</summary>
     public async Task StopAsync()
     {
@@ -123,7 +120,7 @@ public sealed class Dispatcher
         }
         catch (Exception ex)
         {
-            _log.Error("调度器循环异常终止", ex);
+            _log.LogError("调度器循环异常终止", ex);
         }
     }
 
@@ -134,7 +131,7 @@ public sealed class Dispatcher
         {
             if (!_recipes.TryGetValue(work.RecipeId, out var recipe))
             {
-                log.Error($"未注册的配方 {work.RecipeId}，工件转不良");
+                log.LogError($"未注册的配方 {work.RecipeId}，工件转不良");
                 Finish(work, TestVerdict.Fail);
                 return;
             }
@@ -149,7 +146,7 @@ public sealed class Dispatcher
         }
         catch (Exception ex)
         {
-            log.Error("工件路由失败，转不良", ex);
+            log.LogError("工件路由失败，转不良", ex);
             Finish(work, TestVerdict.Fail);
         }
     }
@@ -204,7 +201,7 @@ public sealed class Dispatcher
         }
         catch (Exception ex)
         {
-            log.Error("工件流转失败，转不良", ex);
+            log.LogError("工件流转失败，转不良", ex);
             _progress.Remove(work.Id);
             Finish(work, TestVerdict.Fail);
         }
@@ -250,7 +247,7 @@ public sealed class Dispatcher
             }
             catch (Exception ex)
             {
-                _log.Error("成品队列消费者异常", ex);
+                _log.LogError("成品队列消费者异常", ex);
             }
         }
     }
@@ -261,20 +258,13 @@ public sealed class Dispatcher
 
     private sealed record StationCompleted(StationCompletion Completion) : DispatchEvent;
 
-    private sealed class WorkProgress
+    private sealed class WorkProgress(RecipeDefinition recipe, int stageIndex, int remaining)
     {
-        public WorkProgress(RecipeDefinition recipe, int stageIndex, int remaining)
-        {
-            Recipe = recipe;
-            StageIndex = stageIndex;
-            Remaining = remaining;
-        }
+        public RecipeDefinition Recipe { get; } = recipe;
 
-        public RecipeDefinition Recipe { get; }
+        public int StageIndex { get; set; } = stageIndex;
 
-        public int StageIndex { get; set; }
-
-        public int Remaining { get; set; }
+        public int Remaining { get; set; } = remaining;
     }
 }
 

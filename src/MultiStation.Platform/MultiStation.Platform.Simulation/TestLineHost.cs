@@ -26,19 +26,28 @@ public sealed record AlarmItem(
 /// 一条完整测试线的组合根：设备域 + 调度器 + 6 个工位执行器 + 落盘域 + 投料。
 /// 控制台看板和 WPF 窗口共用同一套装配，UI 只读快照、只发命令。
 /// </summary>
-public sealed class TestLineHost
+public sealed class TestLineHost : IDisposable
 {
     public const int WipLimit = 24;
 
-    public static readonly string[] StationIds = { "ST1", "ST2", "ST3", "ST4", "ST5", "ST6" };
+    public static readonly string[] StationIds = ["ST1", "ST2", "ST3", "ST4", "ST5", "ST6"];
+
+    private static readonly IReadOnlyList<string>[] RecipeBBranches =
+    [
+        ["ST1"],
+        ["ST2"],
+        ["ST3", "ST4"], // 并行分支：外观与尺寸同时检测
+        ["ST5"],
+        ["ST6"],
+    ];
 
     private readonly TelemetrySink _sink;
-    private readonly IAppLog _log;
+    private readonly StructuredLog _log;
     private readonly DemoScenario _scenario = new();
     private readonly DeviceHub _hub;
     private readonly Dispatcher _dispatcher;
-    private readonly List<StationRuntime> _stations = new();
-    private readonly List<RecipeDefinition> _recipes = new();
+    private readonly List<StationRuntime> _stations = [];
+    private readonly List<RecipeDefinition> _recipes = [];
     private readonly ConcurrentQueue<WorkHistoryItem> _history = new();
     private readonly ConcurrentQueue<AlarmItem> _alarms = new();
     private readonly CancellationTokenSource _cts = new();
@@ -57,14 +66,7 @@ public sealed class TestLineHost
         _log = new StructuredLog(_sink);
 
         _recipes.Add(RecipeDefinition.Serial("A", StationIds));
-        _recipes.Add(new RecipeDefinition("B", new IReadOnlyList<string>[]
-        {
-            new[] { "ST1" },
-            new[] { "ST2" },
-            new[] { "ST3", "ST4" }, // 并行分支：外观与尺寸同时检测
-            new[] { "ST5" },
-            new[] { "ST6" },
-        }));
+        _recipes.Add(new RecipeDefinition("B", RecipeBBranches));
 
         _hub = new DeviceHub(StationIds, _log);
         _dispatcher = new Dispatcher(_log, LogFinished);
@@ -200,6 +202,9 @@ public sealed class TestLineHost
 
     public void DisconnectPlc(double seconds) => _hub.Plc.SimulateDisconnect(TimeSpan.FromSeconds(seconds));
 
+    /// <summary>释放资源：停止整条测试线。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
+
     public async Task StopAsync()
     {
         if (!_started)
@@ -314,7 +319,7 @@ public sealed class TestLineHost
             work.Verdict ?? TestVerdict.Fail,
             work.CycleMs,
             work.FinishedAt ?? DateTimeOffset.Now,
-            work.Results.Values.OrderBy(result => result.StationId).ToArray());
+            [.. work.Results.Values.OrderBy(result => result.StationId)]);
 
         _history.Enqueue(historyItem);
         while (_history.Count > 1000 && _history.TryDequeue(out _))

@@ -15,9 +15,9 @@ public enum TowerLight
 /// PLC 通信域：独占一个长驻循环，维护心跳与只读数据镜像，负责断线重连退避。
 /// 所有工位共享这一台 PLC，因此动作意图统一进命令队列由本域串行化。
 /// </summary>
-public sealed class PlcDomain
+public sealed class PlcDomain(IAppLog log) : IDisposable
 {
-    private readonly IAppLog _log;
+    private readonly IAppLog _log = log.ForContext("Device", "PLC");
     private readonly Channel<PlcCommand> _commands = Channel.CreateUnbounded<PlcCommand>(new UnboundedChannelOptions
     {
         SingleReader = true,
@@ -36,11 +36,6 @@ public sealed class PlcDomain
     private volatile bool _connected;
     private Task? _loop;
 
-    public PlcDomain(IAppLog log)
-    {
-        _log = log.ForContext("Device", "PLC");
-    }
-
     public ProcessImage Snapshot => Volatile.Read(ref _image);
 
     public bool Connected => _connected;
@@ -49,6 +44,9 @@ public sealed class PlcDomain
     {
         _loop = Task.Run(() => RunAsync(_cts.Token));
     }
+
+    /// <summary>释放资源：停止 PLC 通信域。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 
     public async Task StopAsync()
     {

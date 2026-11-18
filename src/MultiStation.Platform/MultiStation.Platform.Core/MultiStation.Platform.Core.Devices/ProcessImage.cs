@@ -8,10 +8,6 @@ public sealed record ProcessImage(
     string Mode,
     IReadOnlyDictionary<string, bool> Io);
 
-public sealed class DeviceDisconnectedException : Exception
+public sealed class DeviceDisconnectedException(string message) : Exception(message)
 {
-    public DeviceDisconnectedException(string message)
-        : base(message)
-    {
-    }
 }

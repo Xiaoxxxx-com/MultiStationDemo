@@ -1,0 +1,13 @@
+root = true
+
+# 统一换行符，避免 IDE / dotnet format 对同一份代码反复报“修复空格格式”
+[*]
+end_of_line = crlf
+
+[*.cs]
+# 集合表达式建议在 IDE 中按 warning 呈现，确保构建与 IDE 一致
+dotnet_diagnostic.IDE0300.severity = warning
+
+# IDE0130 按“项目根命名空间 + 相对目录”推断命名空间，与 Ruler/01 的 R-02、R-03、R-05
+# （子模块目录自带完整点分前缀，命名空间等于目录名本身）冲突，关闭该规则避免误报
+dotnet_diagnostic.IDE0130.severity = none

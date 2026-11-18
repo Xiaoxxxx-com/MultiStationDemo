@@ -11,7 +11,7 @@ namespace MultiStation.Ui.Desktop;
 /// <summary>结果追溯独立窗口，与主窗口共享同一个历史集合。</summary>
 public partial class HistoryWindow : Window
 {
-    private static readonly string[] VerdictOptions = { "全部", "良品", "不良" };
+    private static readonly string[] VerdictOptions = ["全部", "良品", "不良"];
 
     private readonly ObservableCollection<HistoryRowVm> _rows;
     private readonly ICollectionView _view;

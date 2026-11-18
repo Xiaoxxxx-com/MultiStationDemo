@@ -50,15 +50,15 @@ public static class RuleIds
 
     /// <summary>禁止作为命名空间层级或类型名后缀的泛化词（R-04）。</summary>
     public static readonly string[] ForbiddenSegments =
-    {
+    [
         "Utils", "Util", "Common", "Helper", "Helpers", "Misc", "Base"
-    };
+    ];
 
     /// <summary>投递方法名：返回 DeliveryResult，必须被检查。</summary>
-    public static readonly string[] DeliveryMethods = { "SendAsync", "PublishAsync" };
+    public static readonly string[] DeliveryMethods = ["SendAsync", "PublishAsync"];
 
     /// <summary>请求方法名：只允许在非执行循环线程调用。</summary>
-    public static readonly string[] RequestMethods = { "RequestAsync", "QueryOutcomeAsync" };
+    public static readonly string[] RequestMethods = ["RequestAsync", "QueryOutcomeAsync"];
 
     /// <summary>契约族根命名前缀。</summary>
     public const string ContractsPrefix = "MultiStation.Platform.Contracts";
@@ -68,7 +68,7 @@ public static class RuleIds
 
     /// <summary>基础设施程序集：不属于业务模块，互引不受 R-10 约束。</summary>
     public static readonly string[] InfrastructureAssemblies =
-    {
+    [
         "MultiStation.Platform.Contracts",
         "MultiStation.Platform.Core",
         "MultiStation.Platform.Config",
@@ -79,7 +79,7 @@ public static class RuleIds
         "MultiStation.Ui.Desktop",
         "MultiStation.Ui.Demo",
         "MultiStation.Analyzers"
-    };
+    ];
 
     /// <summary>判断程序集名是否为业务模块（R-10 的约束对象）。</summary>
     public static bool IsModuleAssembly(string? assemblyName)

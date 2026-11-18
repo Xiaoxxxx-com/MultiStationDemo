@@ -10,7 +10,7 @@ public interface IAppLog
 
     void Warn(string message);
 
-    void Error(string message, Exception? exception = null);
+    void LogError(string message, Exception? exception = null);
 
     /// <summary>写一条结构化测试结果（落盘级别 Result）。</summary>
     void Record(string message, IReadOnlyDictionary<string, object?> fields);
@@ -26,7 +26,7 @@ public sealed class StructuredLog : IAppLog
     private readonly Dictionary<string, object?> _context;
 
     public StructuredLog(TelemetrySink sink)
-        : this(sink, new Dictionary<string, object?>())
+        : this(sink, [])
     {
     }
 
@@ -51,7 +51,7 @@ public sealed class StructuredLog : IAppLog
 
     public void Warn(string message) => Emit(LogLevel.Warn, message, null, null);
 
-    public void Error(string message, Exception? exception = null) =>
+    public void LogError(string message, Exception? exception = null) =>
         Emit(LogLevel.Error, message, exception?.ToString(), null);
 
     public void Record(string message, IReadOnlyDictionary<string, object?> fields) =>

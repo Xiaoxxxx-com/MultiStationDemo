@@ -7,18 +7,12 @@ namespace MultiStation.Platform.Simulation;
 /// 模拟工艺序列：真实项目里这里换成相机 SDK / PLC 读写 / 仪器通信调用。
 /// 所有等待都接受 CancellationToken，保证工位可以被单独停止。
 /// </summary>
-public sealed class StationSequences
+public sealed class StationSequences(DeviceHub hub, DemoScenario scenario)
 {
-    private readonly DeviceHub _hub;
-    private readonly DemoScenario _scenario;
+    private readonly DeviceHub _hub = hub;
+    private readonly DemoScenario _scenario = scenario;
 
-    public StationSequences(DeviceHub hub, DemoScenario scenario)
-    {
-        _hub = hub;
-        _scenario = scenario;
-    }
-
-    public async Task<StationOutcome> LoadAsync(StationContext ctx, WorkItem item, CancellationToken ct)
+    public async Task<StationOutcome> LoadAsync(StationContext ctx, WorkItem _, CancellationToken ct)
     {
         EnsureHealthy(ctx);
         if (!_hub.Plc.Snapshot.Connected)
@@ -71,7 +65,7 @@ public sealed class StationSequences
         return new StationOutcome(true, "尺寸合格", Measure(("Diameter", 10.0 + Math.Round(Random.Shared.NextDouble() * 0.02, 3))));
     }
 
-    public async Task<StationOutcome> FunctionAsync(StationContext ctx, WorkItem item, CancellationToken ct)
+    public async Task<StationOutcome> FunctionAsync(StationContext ctx, WorkItem _, CancellationToken ct)
     {
         EnsureHealthy(ctx);
         var image = _hub.Plc.Snapshot;
@@ -90,7 +84,7 @@ public sealed class StationSequences
         return new StationOutcome(true, "功能测试通过", Measure(("Torque", 3.2 + Math.Round(Random.Shared.NextDouble() * 0.2, 2))));
     }
 
-    public async Task<StationOutcome> UnloadAsync(StationContext ctx, WorkItem item, CancellationToken ct)
+    public async Task<StationOutcome> UnloadAsync(StationContext ctx, WorkItem _, CancellationToken ct)
     {
         EnsureHealthy(ctx);
         await Task.Delay(110, ct);
@@ -105,6 +99,6 @@ public sealed class StationSequences
         }
     }
 
-    private static IReadOnlyDictionary<string, double> Measure((string Key, double Value) measurement) =>
-        new Dictionary<string, double> { [measurement.Key] = measurement.Value };
+    private static Dictionary<string, double> Measure((string Key, double Value) measurement) =>
+        new() { [measurement.Key] = measurement.Value };
 }

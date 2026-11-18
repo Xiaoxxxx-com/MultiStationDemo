@@ -6,7 +6,7 @@
 /// </summary>
 public sealed class AsyncSignal
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private TaskCompletionSource? _pending;
     private bool _signaled;
 

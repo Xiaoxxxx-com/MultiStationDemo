@@ -1,0 +1,9 @@
+<Project>
+
+  <!-- 统一代码分析级别：让命令行构建与 IDE Problems 面板保持一致（Recommended 级 .NET 分析器 + 代码风格检查） -->
+  <PropertyGroup>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>

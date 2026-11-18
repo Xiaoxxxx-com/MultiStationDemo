@@ -65,7 +65,8 @@ public static class LicenseService
             }
         }
 
-        return candidates[candidates.Length - 1];
+        // 最后一个候选为固定生成的临时目录，必定非空
+        return candidates[^1]!;
     }
 
     /// <summary>评估当前授权状态。nowOverride 仅用于测试。</summary>

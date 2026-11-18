@@ -15,7 +15,7 @@ public static class PermissionBypass
     /// <summary>单次屏蔽时长上限，避免误操作导致权限长期失守。</summary>
     public static readonly TimeSpan MaxDuration = TimeSpan.FromDays(90);
 
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private static DateTimeOffset? _until;
     private static string _reason = string.Empty;

@@ -1,4 +1,5 @@
-﻿using MultiStation.Platform.Simulation;
+﻿using System.Globalization;
+using MultiStation.Platform.Simulation;
 
 namespace MultiStation.Ui.Desktop;
 
@@ -19,5 +20,5 @@ public sealed class AlarmRowVm
     public string Message { get; }
 
     public static AlarmRowVm From(AlarmItem item) =>
-        new(item.Timestamp.ToString("MM-dd HH:mm:ss"), item.StationId, item.Message);
+        new(item.Timestamp.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture), item.StationId, item.Message);
 }

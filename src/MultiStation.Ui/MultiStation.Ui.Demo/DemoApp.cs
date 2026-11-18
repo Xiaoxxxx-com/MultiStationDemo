@@ -7,16 +7,17 @@ namespace MultiStation.Ui.Demo;
 /// <summary>
 /// 控制台宿主：只负责看板渲染、按键与生命周期，测试线装配全部在 TestLineHost。
 /// </summary>
-internal sealed class DemoApp
+internal sealed class DemoApp(DemoOptions options) : IDisposable
 {
-    private readonly DemoOptions _options;
-    private readonly TestLineHost _host;
+    private readonly DemoOptions _options = options;
+    private readonly TestLineHost _host = new(options.LogDirectory);
     private readonly CancellationTokenSource _uiCts = new();
 
-    public DemoApp(DemoOptions options)
+    /// <summary>释放资源：取消界面循环并释放取消令牌。</summary>
+    public void Dispose()
     {
-        _options = options;
-        _host = new TestLineHost(options.LogDirectory);
+        _uiCts.Cancel();
+        _uiCts.Dispose();
     }
 
     public async Task RunAsync()
@@ -31,11 +32,11 @@ internal sealed class DemoApp
             _uiCts.CancelAfter(TimeSpan.FromSeconds(_options.Seconds));
         }
 
-        ConsoleCancelEventHandler onCancel = (_, e) =>
+        void onCancel(object? _, ConsoleCancelEventArgs e)
         {
             e.Cancel = true;
             _uiCts.Cancel();
-        };
+        }
         Console.CancelKeyPress += onCancel;
 
         _host.Start();
@@ -89,7 +90,7 @@ internal sealed class DemoApp
         }
         finally
         {
-            dashboard.Restore();
+            Dashboard.Restore();
         }
     }
 

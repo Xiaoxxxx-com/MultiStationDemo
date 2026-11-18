@@ -9,9 +9,9 @@ public sealed record CaptureResult(string WorkItemId, string ImageName, double M
 /// 相机通信域：每个工位独占一台相机、一条命令队列和一条结果通道。
 /// 工位不持有 SDK 句柄，只提交拍照意图并异步等待结果。
 /// </summary>
-public sealed class CameraDomain
+public sealed class CameraDomain(string stationId, IAppLog log) : IDisposable
 {
-    private readonly IAppLog _log;
+    private readonly IAppLog _log = log.ForContext("Device", "Camera").ForContext("StationId", stationId);
     private readonly Channel<CaptureCommand> _commands = Channel.CreateUnbounded<CaptureCommand>(new UnboundedChannelOptions
     {
         SingleReader = true,
@@ -23,13 +23,7 @@ public sealed class CameraDomain
     private volatile bool _connected;
     private Task? _loop;
 
-    public CameraDomain(string stationId, IAppLog log)
-    {
-        StationId = stationId;
-        _log = log.ForContext("Device", "Camera").ForContext("StationId", stationId);
-    }
-
-    public string StationId { get; }
+    public string StationId { get; } = stationId;
 
     public bool Connected => _connected;
 
@@ -39,6 +33,9 @@ public sealed class CameraDomain
     {
         _loop = Task.Run(() => RunAsync(_cts.Token));
     }
+
+    /// <summary>释放资源：停止相机通信域。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 
     public async Task StopAsync()
     {

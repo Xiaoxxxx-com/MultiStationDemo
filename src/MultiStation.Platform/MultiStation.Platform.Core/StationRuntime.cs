@@ -15,13 +15,13 @@ public sealed record StationCompletion(
 /// 工位执行器：一个长驻 Task 驱动一个状态机。等待全部是异步等待（Channel / AsyncSignal），
 /// 挂起时不占用线程池线程；每个工位拥有独立的 CancellationToken。
 /// </summary>
-public sealed class StationRuntime
+public sealed class StationRuntime : IDisposable
 {
     private readonly StationDefinition _definition;
     private readonly Func<StationCompletion, ValueTask> _completionSink;
     private readonly IAppLog _log;
     private readonly Channel<WorkItem> _input;
-    private readonly object _lifecycleGate = new();
+    private readonly Lock _lifecycleGate = new();
     private CancellationTokenSource? _runCts;
     private Task? _loop;
     private StationMetrics? _metrics;
@@ -83,6 +83,9 @@ public sealed class StationRuntime
 
         _log.Info("工位执行器已启动");
     }
+
+    /// <summary>释放资源：停止本工位执行器。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 
     /// <summary>只停止本工位，其他工位与调度器继续运行。</summary>
     public async Task StopAsync()
@@ -165,7 +168,7 @@ public sealed class StationRuntime
         }
         catch (Exception ex)
         {
-            _log.Error("工位执行循环异常终止", ex);
+            _log.LogError("工位执行循环异常终止", ex);
         }
         finally
         {
@@ -222,7 +225,7 @@ public sealed class StationRuntime
             Context.Transition(StationEvent.ProcessingFailed);
             PublishMetrics();
 
-            log.Error($"加工异常，工位进入 Error 等待复位：{ex.Message}", ex);
+            log.LogError($"加工异常，工位进入 Error 等待复位：{ex.Message}", ex);
             WriteResult(log, result);
 
             try

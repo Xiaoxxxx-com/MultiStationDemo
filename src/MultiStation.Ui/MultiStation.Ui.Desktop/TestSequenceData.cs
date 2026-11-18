@@ -26,7 +26,7 @@ public sealed record TestSequenceRow(
 public static class TestSequenceData
 {
     public static readonly TestSequenceRow[] Rows =
-    {
+    [
         new("PreSeq", "1", "PRE_TestTrigger", "进站测试触发", "TestProject", "", "", "", "", "", "", "", "", "", "", "", "", "", ""),
         new("PreSeq", "2", "PRE_VAR_INIT", "PreSeq结果初始化", "Action", "Str", "PRE_RESULT", "", "", "", "", "VAR=PRE_RESULT,VALUE=OK", "1000", "1", "", "", "T", "T", "记录本件进站结果 PRE_RESULT=OK：默认按 OK 处理；任一步失败会改成 NG"),
         new("PreSeq", "3", "PRE_R981_WRITE_01_11", "回复PLC触发值10信号", "Action", "Num", "DataBase", "", "", "", "plc_inovance_modbus", "COM=MODBUS_TCP,POINT=R981,VALUE=11", "1000", "1", "", "", "T", "T", "回写 OK=11：进站初始化完成"),
@@ -87,7 +87,7 @@ public static class TestSequenceData
         new("PostSeq", "3", "POST_PSW_INIT", "电源测试", "Action", "Num", "初始化电源", "", "", "", "power_gwinstek_psw_visa", "COM=SCPI,CTRL=INIT", "5000", "1", "", "", "T", "T", "PSW 复位 *RST/*CLS 并关闭输出，回到可复用初始态"),
         new("PostSeq", "4", "", "CAN 通信", "标题", "", "CAN 通信", "", "", "", "", "", "", "", "", "", "T", "T", ""),
         new("PostSeq", "5", "POST_CAN_RESET", "CAN 通信", "Action", "Num", "初始化CAN通道", "", "", "", "can_zlg_card0", "CHAN=0,CTRL=RESET", "3000", "1", "", "", "T", "T", "CAN 通道复位回初始态（设备保持打开，EndSeq 才彻底断开）"),
-    };
+    ];
 }
 
 /// <summary>测试触发序列中的一行（PCTest测试序列.xlsx 的 TriggerSeq 页签）。</summary>
@@ -107,7 +107,7 @@ public sealed record TriggerSequenceRow(
 public static class TriggerSequenceData
 {
     public static readonly TriggerSequenceRow[] Rows =
-    {
+    [
         new("1", "TRIG_R981_START", "PLC 交互", "Test", "10", "plc_inovance_modbus", "COM=MODBUS_TCP,POINT=R981", "2000", "开始测试", "PLC 触发：R981（进站握手字）= 10 → 开始测试（唯一触发条件，F-0247）"),
-    };
+    ];
 }

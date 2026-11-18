@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 
@@ -14,10 +15,10 @@ public sealed record TriggerSnapshot(string StateText, int TriggerCount, string 
 /// 测试触发序列：独立线程循环接收外部设备（PLC R981）的触发信号，
 /// UI 只读取快照；具体动作由 Triggered 事件抛回界面线程执行。
 /// </summary>
-public sealed class TriggerSequenceRunner
+public sealed class TriggerSequenceRunner : IDisposable
 {
     private readonly CancellationTokenSource _cts = new();
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private Task? _worker;
     private bool _executing;
     private int _count;
@@ -39,6 +40,9 @@ public sealed class TriggerSequenceRunner
                 TaskScheduler.Default)
             .Unwrap();
     }
+
+    /// <summary>释放资源：停止触发监听。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 
     public async Task StopAsync()
     {
@@ -83,7 +87,7 @@ public sealed class TriggerSequenceRunner
                 {
                     _count++;
                     _executing = true;
-                    _lastTime = signal.Timestamp.ToString("HH:mm:ss");
+                    _lastTime = signal.Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
                 }
 
                 Triggered?.Invoke(signal);
@@ -105,7 +109,7 @@ public sealed class TriggerSequenceRunner
 }
 
 /// <summary>触发序列行的实时状态。</summary>
-public sealed class TriggerStepVm : INotifyPropertyChanged
+public sealed class TriggerStepVm(TriggerSequenceRow row) : INotifyPropertyChanged
 {
     private static readonly Brush IdleBrush = CreateBrush(0x94, 0xA3, 0xB8);
     private static readonly Brush ActiveBrush = CreateBrush(0x1A, 0x7F, 0x37);
@@ -113,26 +117,17 @@ public sealed class TriggerStepVm : INotifyPropertyChanged
     private string _status = "待触发";
     private Brush _statusBrush = IdleBrush;
 
-    public TriggerStepVm(TriggerSequenceRow row)
-    {
-        Number = row.Number;
-        Code = row.Code;
-        Equal = row.Equal;
-        Target = row.Target;
-        Command = row.Command;
-    }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Number { get; }
+    public string Number { get; } = row.Number;
 
-    public string Code { get; }
+    public string Code { get; } = row.Code;
 
-    public string Equal { get; }
+    public string Equal { get; } = row.Equal;
 
-    public string Target { get; }
+    public string Target { get; } = row.Target;
 
-    public string Command { get; }
+    public string Command { get; } = row.Command;
 
     public string Status
     {

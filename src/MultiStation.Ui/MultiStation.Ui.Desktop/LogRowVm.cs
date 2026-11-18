@@ -1,4 +1,5 @@
-﻿using System.Windows.Media;
+﻿using System.Globalization;
+using System.Windows.Media;
 using MultiStation.Platform.Core.Logging;
 
 namespace MultiStation.Ui.Desktop;
@@ -56,7 +57,7 @@ public sealed class LogRowVm
         };
 
         return new LogRowVm(
-            entry.Timestamp.ToString("HH:mm:ss.fff"),
+            entry.Timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture),
             level,
             tag,
             entry.Message,

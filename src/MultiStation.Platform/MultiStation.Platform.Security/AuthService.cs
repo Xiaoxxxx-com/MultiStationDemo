@@ -27,15 +27,15 @@ public static class AuthService
         {
             if (!File.Exists(UsersPath))
             {
-                return Array.Empty<UserAccount>();
+                return [];
             }
 
             var users = JsonSerializer.Deserialize<List<UserAccount>>(File.ReadAllText(UsersPath), JsonOptions);
-            return users ?? (IReadOnlyList<UserAccount>)Array.Empty<UserAccount>();
+            return users ?? (IReadOnlyList<UserAccount>)[];
         }
         catch (Exception)
         {
-            return Array.Empty<UserAccount>();
+            return [];
         }
     }
 

@@ -6,11 +6,14 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- 与被测主程序保持一致：zlgcan.dll 为 32 位库，硬件检查需 x86 进程 -->
+    <PlatformTarget>x86</PlatformTarget>
     <AssemblyName>MultiStation.Ui.UnitTests</AssemblyName>
     <RootNamespace>MultiStation.Ui.UnitTests</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\MultiStation.Instruments\MultiStation.Instruments.csproj" />
     <ProjectReference Include="..\..\src\MultiStation.Ui\MultiStation.Ui.Desktop\MultiStation.Ui.Desktop.csproj" />
   </ItemGroup>
 

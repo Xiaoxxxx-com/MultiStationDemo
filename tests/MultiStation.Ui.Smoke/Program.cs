@@ -298,11 +298,11 @@ internal static class Program
         // 屏蔽不改变会话角色：绕过只发生在权限校验入口
         var operatorSession = new UserSession("op", UserRole.Operator, DateTimeOffset.Now);
         SessionContext.Current = operatorSession;
-        var sessionStillLimited = !operatorSession.Can(Permission.Configure)
-            && !SessionContext.Has(Permission.Configure)
+        var sessionStillLimited = !operatorSession.Can(PermissionKind.Configure)
+            && !SessionContext.Has(PermissionKind.Configure)
             && PermissionBypass.IsActive;
         SessionContext.Current = null;
-        Check("BP-05", sessionStillLimited, $"bypass-active={PermissionBypass.IsActive} session-can-configure={operatorSession.Can(Permission.Configure)}");
+        Check("BP-05", sessionStillLimited, $"bypass-active={PermissionBypass.IsActive} session-can-configure={operatorSession.Can(PermissionKind.Configure)}");
 
         PermissionBypass.Disable("用例关闭");
         Check("BP-06", !PermissionBypass.IsActive && PermissionBypass.Until is null,
@@ -319,7 +319,7 @@ internal static class Program
         var maxAllowed = PermissionBypass.Enable(TimeSpan.FromDays(90), "上限用例", out var maxError);
         var maxState = PermissionBypass.StateText ?? string.Empty;
         Check("BP-09", maxAllowed && PermissionBypass.Remaining > TimeSpan.FromDays(89)
-                && maxState.Contains("天"),
+                && maxState.Contains('天'),
             $"enabled={maxAllowed} active={PermissionBypass.IsActive} state={maxState} error={maxError}");
 
         // 周单位折算：1 周 = 7 天
@@ -501,7 +501,8 @@ internal static class Program
         // 用户名首尾空格：trim 后 3 位通过，且存储名已去空格
         Reset();
         var uTrim = AuthService.TryRegisterFirstAdmin("  abc  ", password, out _);
-        var stored = AuthService.LoadUsers().FirstOrDefault()?.UserName;
+        var users = AuthService.LoadUsers();
+        var stored = users.Count > 0 ? users[0].UserName : null;
         Check("B-A09", uTrim && stored == "abc", $"register={uTrim} stored={stored}");
 
         // 用户名首尾空格：trim 后 2 位仍拒绝
@@ -813,7 +814,7 @@ internal static class Program
         var dialogClosed = WaitUntil(() => driver.WaitOwnedWindow("权限限时屏蔽", 120) is null);
         var indicator = WaitUntil(() => UiDriver.WaitText(main, "权限屏蔽中", 300));
         var longState = WaitUntil(() =>
-            UiDriver.ById(main, "TxtBypassState")?.Current.Name?.Contains("天") == true);
+            UiDriver.ById(main, "TxtBypassState")?.Current.Name?.Contains('天') == true);
         var buttonText = WaitUntil(() => UiDriver.ById(main, "BtnDebugBypass")?.Current.Name == "屏蔽中");
 
         // 再次打开并关闭屏蔽
@@ -971,8 +972,8 @@ internal static class Program
         var running = WaitUntil(() => UiDriver.ById(main, "TxtTestState")?.Current.Name == "测试中", 3000);
 
         // 测试开始后基础信息区应生成 SN 与 CarrierID
-        var sn = UiDriver.ById(main, "TxtInfoSn")?.Current.Name ?? "-";
-        var carrier = UiDriver.ById(main, "TxtInfoCarrier")?.Current.Name ?? "-";
+        var sn = UiDriver.GetText(UiDriver.ById(main, "TxtInfoSn"));
+        var carrier = UiDriver.GetText(UiDriver.ById(main, "TxtInfoCarrier"));
         var infoReady = sn.StartsWith("SN", StringComparison.Ordinal)
             && carrier.StartsWith("CAR", StringComparison.Ordinal);
 

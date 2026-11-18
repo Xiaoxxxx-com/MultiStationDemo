@@ -85,7 +85,7 @@ public sealed class NamingConventionAnalyzer : DiagnosticAnalyzer
 
         var segments = dir
             .Replace('\\', '/')
-            .Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            .Split(['/'], StringSplitOptions.RemoveEmptyEntries);
 
         if (segments.Length == 0)
         {

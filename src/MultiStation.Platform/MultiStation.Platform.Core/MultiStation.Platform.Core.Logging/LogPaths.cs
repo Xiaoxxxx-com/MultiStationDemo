@@ -37,6 +37,6 @@ public static class LogPaths
             }
         }
 
-        return candidates[candidates.Length - 1];
+        return candidates[^1];
     }
 }

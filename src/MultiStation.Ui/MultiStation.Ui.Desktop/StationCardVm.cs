@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using MultiStation.Platform.Core;
@@ -6,7 +7,7 @@ using MultiStation.Platform.Core;
 namespace MultiStation.Ui.Desktop;
 
 /// <summary>单个工位卡片的只读视图模型，数据来自 StationMetrics 快照。</summary>
-public sealed class StationCardVm : INotifyPropertyChanged
+public sealed class StationCardVm(string id, string name) : INotifyPropertyChanged
 {
     private static readonly Brush WaitingBrush = CreateBrush(0x1A, 0x7F, 0x37);
     private static readonly Brush ProcessingBrush = CreateBrush(0x09, 0x69, 0xDA);
@@ -24,17 +25,11 @@ public sealed class StationCardVm : INotifyPropertyChanged
     private string _message = "-";
     private bool _faulted;
 
-    public StationCardVm(string id, string name)
-    {
-        Id = id;
-        Name = name;
-    }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Id { get; }
+    public string Id { get; } = id;
 
-    public string Name { get; }
+    public string Name { get; } = name;
 
     public string StateText
     {
@@ -85,7 +80,7 @@ public sealed class StationCardVm : INotifyPropertyChanged
         StateText = metrics.State.ToString();
         StateBrush = BrushFor(metrics.State);
         WorkItem = metrics.CurrentWorkId ?? "-";
-        Queue = metrics.QueueDepth.ToString();
+        Queue = metrics.QueueDepth.ToString(CultureInfo.InvariantCulture);
         Counts = $"{metrics.Passed} / {metrics.Failed} / {metrics.ConsecutiveFailures}";
         StateAge = $"已持续 {metrics.StateAge.TotalSeconds:F1}s";
         Message = metrics.LastError ?? metrics.LastMessage ?? "-";

@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using MultiStation.Platform.Core;
 using MultiStation.Platform.Core.Logging;
 using MultiStation.Platform.Simulation;
@@ -8,7 +9,7 @@ namespace MultiStation.Ui.Demo;
 /// <summary>
 /// 控制台看板：只读取工位/调度器/设备的只读快照，不做任何阻塞调用。
 /// </summary>
-internal sealed class Dashboard
+internal sealed class Dashboard(TestLineHost host)
 {
     private const string Esc = "\u001b[";
     private const string Reset = Esc + "0m";
@@ -21,13 +22,8 @@ internal sealed class Dashboard
     private const string Cyan = Esc + "36m";
     private const string BoldRed = Esc + "1;31m";
 
-    private readonly TestLineHost _host;
+    private readonly TestLineHost _host = host;
     private bool _firstFrame = true;
-
-    public Dashboard(TestLineHost host)
-    {
-        _host = host;
-    }
 
     public void Render()
     {
@@ -66,7 +62,7 @@ internal sealed class Dashboard
         }
     }
 
-    public void Restore()
+    public static void Restore()
     {
         Console.Write(Esc + "?25h" + Reset);
     }
@@ -188,7 +184,7 @@ internal sealed class Dashboard
         var workItemId = entry.Fields.TryGetValue("WorkItemId", out var work) ? work?.ToString() : null;
         var message = entry.Message.Replace('\r', ' ').Replace('\n', ' ');
 
-        return Dim + entry.Timestamp.ToString("HH:mm:ss.fff") + Reset
+        return Dim + entry.Timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) + Reset
                + "  " + Colorize(Fit(level, 4), levelColor)
                + "  " + Fit(stationId ?? "-", 5)
                + " " + Fit(workItemId ?? "-", 8)

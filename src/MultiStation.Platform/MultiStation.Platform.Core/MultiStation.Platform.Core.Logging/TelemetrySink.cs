@@ -10,7 +10,7 @@ namespace MultiStation.Platform.Core.Logging;
 /// 数据落盘域：日志与测试结果先进有界 Channel，再由单个后台任务批量写 JSONL。
 /// 工位线程永远不会因为磁盘 IO 而阻塞。
 /// </summary>
-public sealed class TelemetrySink
+public sealed class TelemetrySink : IDisposable
 {
     private const int RecentCapacity = 500;
 
@@ -69,6 +69,9 @@ public sealed class TelemetrySink
         var snapshot = _recent.ToArray();
         return snapshot.Length <= count ? snapshot : snapshot[^count..];
     }
+
+    /// <summary>释放资源：落盘剩余日志并关闭文件写入器。</summary>
+    public void Dispose() => StopAsync().GetAwaiter().GetResult();
 
     public async Task StopAsync()
     {

@@ -22,7 +22,7 @@ public sealed class RecipeDefinition
     public IReadOnlyList<IReadOnlyList<string>> Stages { get; }
 
     public static RecipeDefinition Serial(string id, params string[] stationIds) =>
-        new(id, stationIds.Select(stationId => (IReadOnlyList<string>)new[] { stationId }).ToArray());
+        new(id, [.. stationIds.Select(stationId => (IReadOnlyList<string>)[stationId])]);
 
     public string Describe() => string.Join(
         " → ",

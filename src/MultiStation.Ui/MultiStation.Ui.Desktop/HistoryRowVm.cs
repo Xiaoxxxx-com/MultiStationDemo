@@ -1,4 +1,5 @@
-﻿using System.Windows.Media;
+﻿using System.Globalization;
+using System.Windows.Media;
 using MultiStation.Platform.Simulation;
 
 namespace MultiStation.Ui.Desktop;
@@ -58,12 +59,12 @@ public sealed class HistoryRowVm
                 $"{result.StationId} {(result.Passed ? "PASS" : "NG")} {result.DurationMs:F0}ms {result.Message}"));
 
         return new HistoryRowVm(
-            item.FinishedAt.ToString("MM-dd HH:mm:ss"),
+            item.FinishedAt.ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
             item.WorkItemId,
             item.RecipeId,
             pass ? "良品" : "不良",
             pass ? PassBrush : FailBrush,
-            item.CycleMs.ToString("F0"),
+            item.CycleMs.ToString("F0", CultureInfo.InvariantCulture),
             summary,
             string.IsNullOrEmpty(detail) ? summary : detail);
     }

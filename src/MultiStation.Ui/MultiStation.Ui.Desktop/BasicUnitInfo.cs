@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace MultiStation.Ui.Desktop;
 
 /// <summary>
@@ -24,7 +26,7 @@ public sealed record BasicUnitInfo(
             WorkOrderOf(now),
             recipe,
             operatorName,
-            now.ToString("HH:mm:ss"));
+            now.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
 
     /// <summary>工单号按日期生成：MO + yyyyMMdd。</summary>
     public static string WorkOrderOf(DateTime now) => $"MO{now:yyyyMMdd}";

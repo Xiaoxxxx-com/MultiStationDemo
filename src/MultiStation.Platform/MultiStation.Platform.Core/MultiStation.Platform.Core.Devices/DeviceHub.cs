@@ -3,17 +3,11 @@
 namespace MultiStation.Platform.Core.Devices;
 
 /// <summary>设备通信域集合：一台共用 PLC + 每个工位一台独立相机。</summary>
-public sealed class DeviceHub
+public sealed class DeviceHub(IEnumerable<string> stationIds, IAppLog log)
 {
-    private readonly Dictionary<string, CameraDomain> _cameras;
+    private readonly Dictionary<string, CameraDomain> _cameras = stationIds.ToDictionary(id => id, id => new CameraDomain(id, log), StringComparer.OrdinalIgnoreCase);
 
-    public DeviceHub(IEnumerable<string> stationIds, IAppLog log)
-    {
-        Plc = new PlcDomain(log);
-        _cameras = stationIds.ToDictionary(id => id, id => new CameraDomain(id, log), StringComparer.OrdinalIgnoreCase);
-    }
-
-    public PlcDomain Plc { get; }
+    public PlcDomain Plc { get; } = new PlcDomain(log);
 
     public IReadOnlyCollection<CameraDomain> Cameras => _cameras.Values;
 

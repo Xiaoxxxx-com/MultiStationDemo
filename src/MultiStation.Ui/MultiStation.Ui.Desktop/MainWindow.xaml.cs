@@ -1,6 +1,7 @@
-﻿﻿using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -14,6 +15,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using MultiStation.Platform.Core.Logging;
+using MultiStation.Platform.Core.Production;
 using MultiStation.Platform.Security;
 using MultiStation.Platform.Simulation;
 
@@ -23,16 +25,22 @@ namespace MultiStation.Ui.Desktop;
 /// 测试上位机主窗口：左侧导航 + 运行监控 / 结果追溯 / 报警中心。
 /// UI 线程只做显示与命令下发，所有数据来自 TestLineHost 的只读快照。
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IDisposable
 {
-    private static readonly string[] StationFilterOptions = { "全部", "ST1", "ST2", "ST3", "ST4", "ST5", "ST6" };
-    private static readonly string[] LevelFilterOptions = { "全部", "信息", "警告", "错误", "结果" };
-    private static readonly string[] VerdictFilterOptions = { "全部", "良品", "不良" };
-    private static readonly string[] LogoExtensions = { ".png", ".jpg", ".jpeg", ".bmp" };
+    private static readonly string[] StationFilterOptions = ["全部", "ST1", "ST2", "ST3", "ST4", "ST5", "ST6"];
+    private static readonly string[] LevelFilterOptions = ["全部", "信息", "警告", "错误", "结果"];
+    private static readonly string[] VerdictFilterOptions = ["全部", "良品", "不良"];
+    private static readonly string[] LogoExtensions = [".png", ".jpg", ".jpeg", ".bmp"];
     private static readonly string FieldConfigPath = Path.Combine(
         ResolveConfigRoot(), "Config", "test-process-fields.json");
     private static readonly string TriggerLogPath = Path.Combine(
         ResolveConfigRoot(), "Log", "trigger.log");
+
+    private static readonly JsonSerializerOptions FieldConfigJsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     private static readonly Brush GreenBrush = CreateBrush(0x1A, 0x7F, 0x37);
     private static readonly Brush RedBrush = CreateBrush(0xCF, 0x22, 0x2E);
@@ -43,9 +51,9 @@ public partial class MainWindow : Window
     private readonly TestLineHost _host;
     private readonly DispatcherTimer _timer;
     private readonly ObservableCollection<StationCardVm> _stations;
-    private readonly ObservableCollection<LogRowVm> _logs = new();
-    private readonly ObservableCollection<HistoryRowVm> _history = new();
-    private readonly ObservableCollection<AlarmRowVm> _alarms = new();
+    private readonly ObservableCollection<LogRowVm> _logs = [];
+    private readonly ObservableCollection<HistoryRowVm> _history = [];
+    private readonly ObservableCollection<AlarmRowVm> _alarms = [];
     private readonly ICollectionView _logView;
     private readonly ICollectionView _historyView;
     private readonly string _configDirectory;
@@ -60,22 +68,28 @@ public partial class MainWindow : Window
     private int _logLevelIndex;
     private int _historyVerdictIndex;
     private bool _closing;
+    private bool _useSn = true;
+    private bool _useCarrierId = true;
+    private bool _useShellCode = true;
     private HistoryWindow? _historyWindow;
     private AlarmsWindow? _alarmsWindow;
+    private readonly ModelProfileStore _modelStore;
+    private readonly string _baseTitle;
+    private ModelProfile _currentModel;
 
     public MainWindow()
     {
         InitializeComponent();
 
-        // 标题栏补充当前账号与授权剩余天数，便于现场确认
-        var license = LicenseService.Evaluate();
-        Title = $"{Title} · {SessionContext.DisplayName} · 授权剩余 {license.RemainingDays} 天";
+        // 标题栏补充当前账号、授权剩余天数与当前机种
+        _baseTitle = Title;
 
-        // 免登录调试会话：标题明确标注，配合顶部横幅
-        if (SessionContext.IsDebugBypassSession)
-        {
-            Title += " · 免登录调试";
-        }
+        _modelStore = new ModelProfileStore();
+        var models = _modelStore.Load();
+        var selectedName = _modelStore.LoadSelected();
+        _currentModel = models.FirstOrDefault(m => m.Name == selectedName) ?? models[0];
+        TxtModelName.Text = _currentModel.Name;
+        ApplyTitle();
 
         var logDirectory = LogPaths.ResolveLogDirectory();
 
@@ -109,8 +123,9 @@ public partial class MainWindow : Window
             "MultiStationDemo");
         LoadStationName();
         LoadLogo();
-        TxtClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        TxtClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         InitBasicInfo();
+        RefreshBasicInfoState();
 
         _testController = new SingleStationTestController();
         StepGrid.ItemsSource = _testController.Steps;
@@ -161,7 +176,7 @@ public partial class MainWindow : Window
 
     private void OnTestStart(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
         if (!ConfirmTestStart("手动开始")) return;
         StartNewUnitInfo();
         _testController.Start();
@@ -169,19 +184,19 @@ public partial class MainWindow : Window
 
     private void OnTestPause(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
         _testController.PauseOrResume();
     }
 
     private void OnTestStop(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
         _testController.Stop();
     }
 
     private void OnTestNext(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
         if (!_testController.IsRunning)
         {
             if (!ConfirmTestStart("单步执行")) return;
@@ -209,13 +224,71 @@ public partial class MainWindow : Window
         return confirmed;
     }
 
-    /// <summary>基础信息：初始化工单 / 配方 / 操作员；SN 与 CarrierID 待测试开始时生成。</summary>
+    /// <summary>基础信息：初始化配方；SN 与 CarrierID 待测试开始时生成。</summary>
     private void InitBasicInfo() =>
         ApplyBasicInfo(BasicUnitInfo.Initial(DateTime.Now, CurrentRecipeText(), SessionContext.DisplayName));
 
-    /// <summary>测试开始：生成本件 SN 与 CarrierID，并刷新基础信息区。</summary>
-    private void StartNewUnitInfo() =>
-        ApplyBasicInfo(BasicUnitInfo.ForNewUnit(DateTime.Now, CurrentRecipeText(), SessionContext.DisplayName));
+    /// <summary>测试开始：使用 SN / CarrierID 时保留手工填写值，未使用时保持原样；留空或为 - 时自动生成。</summary>
+    private void StartNewUnitInfo()
+    {
+        var generated = BasicUnitInfo.ForNewUnit(DateTime.Now, CurrentRecipeText(), SessionContext.DisplayName);
+        ApplyBasicInfo(generated with
+        {
+            Sn = _useSn ? KeepManual(TxtInfoSn.Text, generated.Sn) : TxtInfoSn.Text,
+            CarrierId = _useCarrierId ? KeepManual(TxtInfoCarrier.Text, generated.CarrierId) : TxtInfoCarrier.Text,
+        });
+    }
+
+    /// <summary>基础信息可手工输入：已填写的内容沿用，空值或占位符回退到自动生成值。</summary>
+    private static string KeepManual(string current, string generated) =>
+        string.IsNullOrWhiteSpace(current) || current.Trim() == "-" ? generated : current.Trim();
+
+    /// <summary>选择基础信息：弹窗决定启用哪几项，并回填 SN / CarrierID / 壳体码。</summary>
+    private void OnSelectBasicInfo(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BasicInfoWindow(
+            _useSn, _useCarrierId, _useShellCode,
+            TxtInfoSn.Text, TxtInfoCarrier.Text, TxtInfoShellCode.Text)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _useSn = dialog.UseSn;
+        _useCarrierId = dialog.UseCarrierId;
+        _useShellCode = dialog.UseShellCode;
+        ApplyBasicInfoValues(dialog.Sn, dialog.CarrierId, dialog.ShellCode);
+        RefreshBasicInfoState();
+    }
+
+    private void ApplyBasicInfoValues(string sn, string carrierId, string shellCode)
+    {
+        TxtInfoSn.Text = DisplayOrDash(sn);
+        TxtInfoCarrier.Text = DisplayOrDash(carrierId);
+        TxtInfoShellCode.Text = DisplayOrDash(shellCode);
+    }
+
+    private static string DisplayOrDash(string value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    /// <summary>未启用的项直接隐藏输入框，并在标题旁标注启用数量。</summary>
+    private void RefreshBasicInfoState()
+    {
+        PnlInfoSn.Visibility = _useSn ? Visibility.Visible : Visibility.Collapsed;
+        PnlInfoCarrier.Visibility = _useCarrierId ? Visibility.Visible : Visibility.Collapsed;
+        PnlInfoShellCode.Visibility = _useShellCode ? Visibility.Visible : Visibility.Collapsed;
+
+        var enabled = (_useSn ? 1 : 0) + (_useCarrierId ? 1 : 0) + (_useShellCode ? 1 : 0);
+        TxtBasicInfoState.Text = enabled switch
+        {
+            3 => "全部启用",
+            0 => "未启用",
+            _ => $"启用 {enabled}/3",
+        };
+    }
 
     private string CurrentRecipeText() => BasicUnitInfo.MapRecipe(RecipeB.IsChecked == true);
 
@@ -223,14 +296,11 @@ public partial class MainWindow : Window
     {
         TxtInfoSn.Text = info.Sn;
         TxtInfoCarrier.Text = info.CarrierId;
-        TxtInfoWorkOrder.Text = info.WorkOrder;
         TxtInfoRecipe.Text = info.Recipe;
-        TxtInfoOperator.Text = info.Operator;
-        TxtInfoStartedAt.Text = info.StartedAt;
     }
 
     /// <summary>权限校验：不满足时提示并拒绝执行，返回 false。调试屏蔽期内一律放行。</summary>
-    private bool RequirePermission(Permission permission)
+    private bool RequirePermission(PermissionKind permission)
     {
         if (SessionContext.Has(permission) || PermissionBypass.IsActive)
         {
@@ -339,7 +409,7 @@ public partial class MainWindow : Window
     /// <summary>字段配置：勾选决定测试过程列表显示哪些列。</summary>
     private void OnFieldConfig(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Configure)) return;
+        if (!RequirePermission(PermissionKind.Configure)) return;
 
         var menu = new ContextMenu
         {
@@ -432,11 +502,7 @@ public partial class MainWindow : Window
             Directory.CreateDirectory(Path.GetDirectoryName(FieldConfigPath)!);
             File.WriteAllText(
                 FieldConfigPath,
-                JsonSerializer.Serialize(hidden, new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                }));
+                JsonSerializer.Serialize(hidden, FieldConfigJsonOptions));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -464,14 +530,16 @@ public partial class MainWindow : Window
             _ => MutedBrush,
         };
 
-        TxtTestPass.Text = controller.PassCount.ToString();
-        TxtTestNg.Text = controller.NgCount.ToString();
-        TxtTestTotal.Text = total.ToString();
-        TxtTestYield.Text = total == 0 ? "--" : (controller.PassCount * 100.0 / total).ToString("F1") + "%";
+        TxtTestPass.Text = controller.PassCount.ToString(CultureInfo.InvariantCulture);
+        TxtTestNg.Text = controller.NgCount.ToString(CultureInfo.InvariantCulture);
+        TxtTestTotal.Text = total.ToString(CultureInfo.InvariantCulture);
+        TxtTestYield.Text = total == 0
+            ? "--"
+            : (controller.PassCount * 100.0 / total).ToString("F1", CultureInfo.InvariantCulture) + "%";
 
         if (StationLogList.Items.Count > 0)
         {
-            StationLogList.ScrollIntoView(StationLogList.Items[StationLogList.Items.Count - 1]);
+            StationLogList.ScrollIntoView(StationLogList.Items[^1]);
         }
     }
 
@@ -561,20 +629,20 @@ public partial class MainWindow : Window
 
     private void UpdateUi()
     {
-        TxtClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        TxtClock.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         PermissionBypass.Refresh();
         RefreshBypassState();
 
         var metrics = _host.Metrics;
-        TxtSubmitted.Text = metrics.Submitted.ToString();
-        TxtPassed.Text = metrics.Passed.ToString();
-        TxtFailed.Text = metrics.Failed.ToString();
-        TxtInProcess.Text = metrics.InProcess.ToString();
+        TxtSubmitted.Text = metrics.Submitted.ToString(CultureInfo.InvariantCulture);
+        TxtPassed.Text = metrics.Passed.ToString(CultureInfo.InvariantCulture);
+        TxtFailed.Text = metrics.Failed.ToString(CultureInfo.InvariantCulture);
+        TxtInProcess.Text = metrics.InProcess.ToString(CultureInfo.InvariantCulture);
 
         var elapsed = DateTimeOffset.Now - _host.StartedAt;
         TxtRuntime.Text = $"运行 {(int)elapsed.TotalHours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
         var throughput = metrics.Completed / Math.Max(elapsed.TotalSeconds, 1);
-        TxtThroughput.Text = throughput.ToString("F2");
+        TxtThroughput.Text = throughput.ToString("F2", CultureInfo.InvariantCulture);
         TxtRate.Text = $"吞吐 {throughput:F2} 件/s";
 
         var running = _host.IsRunning;
@@ -613,7 +681,7 @@ public partial class MainWindow : Window
         var trigger = _triggerRunner.Snapshot();
         TxtTriggerState.Text = trigger.StateText;
         TxtTriggerState.Foreground = trigger.StateText == "执行中" ? GreenBrush : MutedBrush;
-        TxtTriggerCount.Text = trigger.TriggerCount.ToString();
+        TxtTriggerCount.Text = trigger.TriggerCount.ToString(CultureInfo.InvariantCulture);
         TxtTriggerLast.Text = trigger.LastTime;
     }
 
@@ -746,6 +814,56 @@ public partial class MainWindow : Window
 
     private void OnNavAlarms(object sender, RoutedEventArgs e) => ShowPage(PageAlarms);
 
+    /// <summary>标题栏统一拼接账号、授权与当前机种信息。</summary>
+    private void ApplyTitle()
+    {
+        var license = LicenseService.Evaluate();
+        var title = $"{_baseTitle} · {SessionContext.DisplayName} · 授权剩余 {license.RemainingDays} 天";
+        if (SessionContext.IsDebugBypassSession)
+        {
+            title += " · 免登录调试";
+        }
+
+        if (!string.IsNullOrEmpty(_currentModel?.Name))
+        {
+            title += $" · 机种 {_currentModel.Name}";
+        }
+
+        Title = title;
+    }
+
+    /// <summary>机种切换：修改机种配置或选择其它机种后立即生效。</summary>
+    private void OnSwitchModel(object sender, RoutedEventArgs e)
+    {
+        if (!RequirePermission(PermissionKind.Configure))
+        {
+            return;
+        }
+
+        var dialog = new ModelSwitchWindow(_modelStore, _currentModel) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.SelectedModel is null)
+        {
+            return;
+        }
+
+        _currentModel = dialog.SelectedModel;
+        TxtModelName.Text = _currentModel.Name;
+        ApplyTitle();
+        TxtStatus.Text = $"已切换机种：{_currentModel.Name}";
+    }
+
+    /// <summary>ECU 烧录：按当前机种参数执行 UDS 刷写。</summary>
+    private void OnOpenFlashTest(object sender, RoutedEventArgs e)
+    {
+        if (!RequirePermission(PermissionKind.Operate))
+        {
+            return;
+        }
+
+        var dialog = new FlashWindow(_currentModel) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private void OnOpenHistoryWindow(object sender, RoutedEventArgs e)
     {
         if (_historyWindow is { IsVisible: true })
@@ -859,7 +977,7 @@ public partial class MainWindow : Window
 
     private void OnFeed(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
         if (!ConfirmTestStart("手动投料")) return;
 
         var recipe = RecipeB.IsChecked == true ? "B" : "A";
@@ -869,7 +987,7 @@ public partial class MainWindow : Window
 
     private void OnResetFaults(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
 
         var reset = _host.ResetFaults("界面复位");
         TxtStatus.Text = $"已清除故障注入并复位 {reset} 个异常工位";
@@ -921,7 +1039,7 @@ public partial class MainWindow : Window
 
     private void OnExportHistory(object sender, RoutedEventArgs e)
     {
-        if (!RequirePermission(Permission.Operate)) return;
+        if (!RequirePermission(PermissionKind.Operate)) return;
 
         var dialog = new SaveFileDialog
         {
@@ -977,6 +1095,21 @@ public partial class MainWindow : Window
         {
             TxtStatus.Text = "无法打开日志目录：" + ex.Message;
         }
+    }
+
+    /// <summary>释放资源：已进入停机流程时仅释放令牌，否则同步停止各子系统。</summary>
+    public void Dispose()
+    {
+        if (!_closing)
+        {
+            _closing = true;
+            _timer.Stop();
+            _triggerRunner.Dispose();
+            _testController.Dispose();
+            _host.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)

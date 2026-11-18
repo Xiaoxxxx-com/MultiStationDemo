@@ -49,7 +49,7 @@ public enum UserRole
 }
 
 /// <summary>可被授予的操作权限。</summary>
-public enum Permission
+public enum PermissionKind
 {
     /// <summary>启停测试、投料、复位故障等产线操作。</summary>
     Operate,
@@ -65,11 +65,11 @@ public sealed record UserAccount(string UserName, string Salt, string Hash, User
 /// <summary>登录会话。</summary>
 public sealed record UserSession(string UserName, UserRole Role, DateTimeOffset LoginAt)
 {
-    public bool Can(Permission permission) => Role switch
+    public bool Can(PermissionKind permission) => Role switch
     {
         UserRole.Admin => true,
-        UserRole.Engineer => permission is Permission.Operate or Permission.Configure,
-        UserRole.Operator => permission is Permission.Operate,
+        UserRole.Engineer => permission is PermissionKind.Operate or PermissionKind.Configure,
+        UserRole.Operator => permission is PermissionKind.Operate,
         _ => false
     };
 
@@ -84,7 +84,7 @@ public static class SessionContext
 
     public static UserSession? Current { get; set; }
 
-    public static bool Has(Permission permission) => Current?.Can(permission) == true;
+    public static bool Has(PermissionKind permission) => Current?.Can(permission) == true;
 
     public static string DisplayName => Current?.DisplayName ?? "未登录";
 

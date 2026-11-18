@@ -115,6 +115,29 @@ internal sealed class UiDriver : IDisposable
         => root.FindFirst(TreeScope.Descendants,
             new PropertyCondition(AutomationElement.NameProperty, name));
 
+    /// <summary>读取控件文本：输入框取 ValuePattern，文本块回退到 Name。</summary>
+    public static string GetText(AutomationElement? element)
+    {
+        if (element is null)
+        {
+            return "-";
+        }
+
+        try
+        {
+            if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var valuePattern))
+            {
+                return ((ValuePattern)valuePattern).Current.Value;
+            }
+
+            return element.Current.Name;
+        }
+        catch (ElementNotAvailableException)
+        {
+            return "-";
+        }
+    }
+
     /// <summary>写入文本：优先 ValuePattern，不支持时聚焦后用键盘输入。</summary>
     public static bool SetText(AutomationElement element, string text)
     {

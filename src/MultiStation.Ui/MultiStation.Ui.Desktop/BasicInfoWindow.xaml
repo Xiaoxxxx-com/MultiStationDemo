@@ -1,0 +1,48 @@
+<Window x:Class="MultiStation.Ui.Desktop.BasicInfoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="选择基础信息"
+        Width="460" Height="470"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="ToolWindow"
+        Background="#F4F6FA" Foreground="#1F2937"
+        FontFamily="Microsoft YaHei UI" FontSize="13">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="选择基础信息" FontSize="18" FontWeight="Bold" Margin="0,0,0,8" />
+
+        <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#6B7280" FontSize="11" Margin="0,0,0,16"
+                   Text="勾选需要使用的项，未勾选的项其输入框将从主界面隐藏；SN / CarrierID 留空或为 - 时测试开始自动生成，壳体码仅手工填写。" />
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,10">
+            <CheckBox x:Name="ChkUseSn" Content="SN" Checked="OnUseChanged" Unchecked="OnUseChanged" />
+            <TextBox x:Name="TxtBasicSn" Height="30" Margin="0,4,0,0" Padding="8,4" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Margin="0,0,0,10">
+            <CheckBox x:Name="ChkUseCarrier" Content="CarrierID" Checked="OnUseChanged" Unchecked="OnUseChanged" />
+            <TextBox x:Name="TxtBasicCarrier" Height="30" Margin="0,4,0,0" Padding="8,4" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Margin="0,0,0,10">
+            <CheckBox x:Name="ChkUseShellCode" Content="壳体码" Checked="OnUseChanged" Unchecked="OnUseChanged" />
+            <TextBox x:Name="TxtBasicShellCode" Height="30" Margin="0,4,0,0" Padding="8,4" VerticalContentAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnBasicCancel" Content="取消" Width="88" Height="32" Margin="0,0,8,0" Click="OnCancel" />
+            <Button x:Name="BtnBasicConfirm" Content="确定" Width="88" Height="32" IsDefault="True" Click="OnConfirm"
+                    Background="#2563EB" Foreground="White" BorderThickness="0" />
+        </StackPanel>
+    </Grid>
+</Window>

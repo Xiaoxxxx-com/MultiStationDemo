@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -9,7 +10,7 @@ using MultiStation.Platform.Core.Execution;
 namespace MultiStation.Ui.Desktop;
 
 /// <summary>单工位测试过程行。</summary>
-public sealed class TestStepVm : INotifyPropertyChanged
+public sealed class TestStepVm(TestSequenceRow row) : INotifyPropertyChanged
 {
     private static readonly Brush PendingBrush = CreateBrush(0x94, 0xA3, 0xB8);
     private static readonly Brush RunningBrush = CreateBrush(0x09, 0x69, 0xDA);
@@ -23,68 +24,45 @@ public sealed class TestStepVm : INotifyPropertyChanged
     private string _duration = "-";
     private string _time = "-";
 
-    public TestStepVm(TestSequenceRow row)
-    {
-        Stage = row.Stage;
-        Number = row.Number;
-        Code = row.Code;
-        Project = row.Project;
-        Kind = row.Kind;
-        ParamCategory = row.ParamCategory;
-        ParamName = row.ParamName;
-        Min = row.Min;
-        Max = row.Max;
-        Equal = row.Equal;
-        Device = row.Device;
-        Command = row.Command;
-        TimeoutMs = row.TimeoutMs;
-        Retry = row.Retry;
-        FlowControl = row.FlowControl;
-        FlowTarget = row.FlowTarget;
-        DisplayEnabled = row.DisplayEnabled;
-        Enabled = row.Enabled;
-        Remark = row.Remark;
-    }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Stage { get; }
+    public string Stage { get; } = row.Stage;
 
-    public string Number { get; }
+    public string Number { get; } = row.Number;
 
-    public string Code { get; }
+    public string Code { get; } = row.Code;
 
-    public string Project { get; }
+    public string Project { get; } = row.Project;
 
-    public string Kind { get; }
+    public string Kind { get; } = row.Kind;
 
-    public string ParamCategory { get; }
+    public string ParamCategory { get; } = row.ParamCategory;
 
-    public string ParamName { get; }
+    public string ParamName { get; } = row.ParamName;
 
-    public string Min { get; }
+    public string Min { get; } = row.Min;
 
-    public string Max { get; }
+    public string Max { get; } = row.Max;
 
-    public string Equal { get; }
+    public string Equal { get; } = row.Equal;
 
-    public string Device { get; }
+    public string Device { get; } = row.Device;
 
-    public string Command { get; }
+    public string Command { get; } = row.Command;
 
-    public string TimeoutMs { get; }
+    public string TimeoutMs { get; } = row.TimeoutMs;
 
-    public string Retry { get; }
+    public string Retry { get; } = row.Retry;
 
-    public string FlowControl { get; }
+    public string FlowControl { get; } = row.FlowControl;
 
-    public string FlowTarget { get; }
+    public string FlowTarget { get; } = row.FlowTarget;
 
-    public string DisplayEnabled { get; }
+    public string DisplayEnabled { get; } = row.DisplayEnabled;
 
-    public string Enabled { get; }
+    public string Enabled { get; } = row.Enabled;
 
-    public string Remark { get; }
+    public string Remark { get; } = row.Remark;
 
     /// <summary>标题 / TestProject 行只做分组，不参与实际测试判定。</summary>
     public bool IsGroup => Kind is "标题" or "TestProject";
@@ -136,8 +114,8 @@ public sealed class TestStepVm : INotifyPropertyChanged
         Measured = measured;
         Result = passed ? "PASS" : "NG";
         ResultBrush = passed ? PassBrush : FailBrush;
-        Duration = (durationMs / 1000.0).ToString("F2");
-        Time = DateTime.Now.ToString("HH:mm:ss");
+        Duration = (durationMs / 1000.0).ToString("F2", CultureInfo.InvariantCulture);
+        Time = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
     }
 
     public void MarkGroup()
@@ -184,7 +162,7 @@ public sealed class TestStepVm : INotifyPropertyChanged
 }
 
 /// <summary>参数监控行。</summary>
-public sealed class ParameterVm : INotifyPropertyChanged
+public sealed class ParameterVm(string name, string unit, string limit) : INotifyPropertyChanged
 {
     private static readonly Brush OkBrush = CreateBrush(0x1A, 0x7F, 0x37);
     private static readonly Brush BadBrush = CreateBrush(0xCF, 0x22, 0x2E);
@@ -194,20 +172,13 @@ public sealed class ParameterVm : INotifyPropertyChanged
     private string _state = "待采集";
     private Brush _stateBrush = IdleBrush;
 
-    public ParameterVm(string name, string unit, string limit)
-    {
-        Name = name;
-        Unit = unit;
-        Limit = limit;
-    }
-
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Name { get; }
+    public string Name { get; } = name;
 
-    public string Unit { get; }
+    public string Unit { get; } = unit;
 
-    public string Limit { get; }
+    public string Limit { get; } = limit;
 
     public string Value
     {
@@ -263,10 +234,11 @@ public sealed class ParameterVm : INotifyPropertyChanged
 /// <summary>
 /// 单工位测试演示控制器：开始/暂停/停止/下一步，驱动测试过程与参数监控两块数据。
 /// </summary>
-public sealed class SingleStationTestController
+public sealed class SingleStationTestController : IDisposable
 {
     private readonly DispatcherTimer _timer;
     private readonly Dispatcher _dispatcher;
+    private static readonly char[] _newLineChars = ['\r', '\n'];
     private readonly Random _random = new();
     private int _current = -1;
     private bool _running;
@@ -283,15 +255,15 @@ public sealed class SingleStationTestController
         _dispatcher = Dispatcher.CurrentDispatcher;
         Steps = new ObservableCollection<TestStepVm>(TestSequenceData.Rows.Select(row => new TestStepVm(row)));
 
-        Parameters = new ObservableCollection<ParameterVm>
-        {
+        Parameters =
+        [
             new("通信状态", "-", "连接成功"),
             new("电压", "V", "4.9~5.1"),
             new("电流", "A", "0~1"),
             new("温度", "°C", "≤60"),
             new("转速", "rpm", "3000±100"),
             new("压力", "kPa", "101±5"),
-        };
+        ];
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(650) };
         _timer.Tick += (_, _) => Advance();
@@ -301,7 +273,7 @@ public sealed class SingleStationTestController
 
     public ObservableCollection<ParameterVm> Parameters { get; }
 
-    public ObservableCollection<string> Logs { get; } = new();
+    public ObservableCollection<string> Logs { get; } = [];
 
     public event Action? Changed;
 
@@ -374,6 +346,13 @@ public sealed class SingleStationTestController
         }
 
         Changed?.Invoke();
+    }
+
+    /// <summary>释放资源：停止计时器与批处理任务。</summary>
+    public void Dispose()
+    {
+        Stop();
+        _timer.Stop();
     }
 
     public void Stop()
@@ -603,11 +582,11 @@ public sealed class SingleStationTestController
     }
 
     /// <summary>截取脚本文本输出的前若干行，避免刷屏。</summary>
-    private static IEnumerable<string> Tail(string standardOutput, string standardError)
+    private static string[] Tail(string standardOutput, string standardError)
     {
         const int maxLines = 8;
         var lines = (standardOutput + Environment.NewLine + standardError)
-            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Split(_newLineChars, StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .Where(line => line.Length > 0)
             .Take(maxLines)

@@ -11,20 +11,13 @@ public enum TestVerdict
 /// <summary>
 /// 在工位之间流转的工件。工位只写入本工位的结果，判定由调度器统一完成。
 /// </summary>
-public sealed class WorkItem
+public sealed class WorkItem(string id, string recipeId)
 {
-    public WorkItem(string id, string recipeId)
-    {
-        Id = id;
-        RecipeId = recipeId;
-        CreatedAt = DateTimeOffset.Now;
-    }
+    public string Id { get; } = id;
 
-    public string Id { get; }
+    public string RecipeId { get; } = recipeId;
 
-    public string RecipeId { get; }
-
-    public DateTimeOffset CreatedAt { get; }
+    public DateTimeOffset CreatedAt { get; } = DateTimeOffset.Now;
 
     public DateTimeOffset? FinishedAt { get; private set; }
 

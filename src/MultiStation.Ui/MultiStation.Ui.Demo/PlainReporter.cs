@@ -4,16 +4,11 @@ using MultiStation.Platform.Simulation;
 namespace MultiStation.Ui.Demo;
 
 /// <summary>纯文本输出，用于重定向/CI 场景下的自检。</summary>
-internal sealed class PlainReporter
+internal sealed class PlainReporter(TestLineHost host)
 {
-    private readonly TestLineHost _host;
+    private readonly TestLineHost _host = host;
     private long _lastSequence;
     private int _ticks;
-
-    public PlainReporter(TestLineHost host)
-    {
-        _host = host;
-    }
 
     public void Tick()
     {

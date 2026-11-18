@@ -2,12 +2,12 @@ using MultiStation.Ui.Desktop;
 
 namespace MultiStation.Ui.UnitTests;
 
-/// <summary>基础信息显示区的单元测试：纯逻辑，不启动界面。</summary>
+/// <summary>单元测试入口：基础信息显示区与测试仪器模块，纯逻辑，不启动界面。</summary>
 internal static class Program
 {
     private static int _failures;
 
-    private static int Main()
+    private static int Main(string[] args)
     {
         // 固定时间，避免依赖系统时钟
         var now = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Local);
@@ -50,11 +50,23 @@ internal static class Program
         Check("BI-07", initialSameMoment.WorkOrder == unit.WorkOrder,
             $"initial={initialSameMoment.WorkOrder} unit={unit.WorkOrder}");
 
+        // 测试仪器模块（MultiStation.Instruments）
+        InstrumentTests.Run();
+
+        // 机种配置
+        ModelTests.Run();
+
+        // 真实仪器连通性检查需显式开启：dotnet run -- --hardware
+        if (args.Contains("--hardware", StringComparer.OrdinalIgnoreCase))
+        {
+            InstrumentTests.RunHardware();
+        }
+
         Console.WriteLine($"SUMMARY failures={_failures}");
         return _failures == 0 ? 0 : 1;
     }
 
-    private static void Check(string id, bool ok, string detail)
+    internal static void Check(string id, bool ok, string detail)
     {
         Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {id} {detail}");
         if (!ok)
