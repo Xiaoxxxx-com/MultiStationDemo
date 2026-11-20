@@ -1,5 +1,6 @@
 using System.IO;
 using MultiStation.Platform.Core.Production;
+using MultiStation.Ui.Desktop;
 
 namespace MultiStation.Ui.UnitTests;
 
@@ -38,8 +39,10 @@ internal static class ModelTests
             var loaded = models[0];
 
             Program.Check("MB-01",
-                defaults.Count == 1
-                    && models.Count == 1
+                defaults.Count == 2
+                    && defaults.Any(m => m.Kind == ModelKind.Flash)
+                    && models.Count == 2
+                    && models.Any(m => m.Kind == ModelKind.Flash && m.Name == "ECU 烧录")
                     && loaded.Name == model.Name
                     && loaded.FirmwarePath == model.FirmwarePath
                     && loaded.IsCanFd
@@ -51,6 +54,16 @@ internal static class ModelTests
                     && reloaded.LoadSelected() == model.Name,
                 $"defaults={defaults.Count} models={models.Count} name={loaded.Name} " +
                 $"request=0x{loaded.RequestId:X3} address=0x{loaded.MemoryAddress:X8}");
+
+            // MB-02 ECU 烧录机种使用独立测试序列（与通用序列不同，全部来自 UDS 烧录流程）
+            var flashRows = FlashSequenceData.Rows;
+            var commonRows = TestSequenceData.Rows;
+            Program.Check("MB-02",
+                flashRows.Length > 0
+                    && flashRows.Any(row => row.Code == "FLASH_EXT_SESSION")
+                    && flashRows.Any(row => row.Command.Contains("COM=UDS", StringComparison.Ordinal))
+                    && !commonRows.Any(row => row.Code == "FLASH_EXT_SESSION"),
+                $"flashRows={flashRows.Length} commonRows={commonRows.Length}");
         }
         finally
         {

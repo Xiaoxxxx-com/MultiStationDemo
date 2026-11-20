@@ -1,11 +1,24 @@
 namespace MultiStation.Platform.Core.Production;
 
+/// <summary>机种类型：决定切换机种后加载哪一套测试序列。</summary>
+public enum ModelKind
+{
+    /// <summary>通用测试机种：同一套测试界面 + 通用测试序列。</summary>
+    Test = 0,
+
+    /// <summary>ECU 烧录机种：同一套测试界面 + 烧录测试序列。</summary>
+    Flash = 1,
+}
+
 /// <summary>
 /// 机种配置：定义某个产品型号的 ECU 烧录参数（CAN 通道、诊断 ID、烧录地址等）。
 /// 机种切换即在不同 <see cref="ModelProfile"/> 之间切换。
 /// </summary>
 public sealed record ModelProfile
 {
+    /// <summary>机种类型；两类机种共用同一套界面，但加载不同的测试序列。</summary>
+    public ModelKind Kind { get; init; } = ModelKind.Test;
+
     public string Name { get; init; } = "默认机种";
 
     public string? FirmwarePath { get; init; }

@@ -32,14 +32,14 @@ public static class RuleIds
     /// <summary>规则来源文件（对应 Ruler 目录）。</summary>
     public static string RuleSource(string diagnosticId) => diagnosticId switch
     {
-        NamingConvention => "Ruler/01_目录与命名规则.md（R-04、R-05）",
-        ModuleReference => "Ruler/01_目录与命名规则.md（R-10）",
-        BlockingCall => "Ruler/03_通信与调度规则.md（C-13）、02_模块编写规则.md（M-11）",
-        UncheckedDeliveryResult => "Ruler/03_通信与调度规则.md（C-12）",
-        TemplateMethodOverride => "Ruler/02_模块编写规则.md（M-07）",
-        PartStructure => "Ruler/02_模块编写规则.md（M-03、M-04）",
-        LargePayload => "Ruler/03_通信与调度规则.md（C-03）",
-        _ => "Ruler/00_规则索引.md"
+        NamingConvention => "Document/Ruler/01_目录与命名规则.md（R-04、R-05）",
+        ModuleReference => "Document/Ruler/01_目录与命名规则.md（R-10）",
+        BlockingCall => "Document/Ruler/03_通信与调度规则.md（C-13）、02_模块编写规则.md（M-11）",
+        UncheckedDeliveryResult => "Document/Ruler/03_通信与调度规则.md（C-12）",
+        TemplateMethodOverride => "Document/Ruler/02_模块编写规则.md（M-07）",
+        PartStructure => "Document/Ruler/02_模块编写规则.md（M-03、M-04）",
+        LargePayload => "Document/Ruler/03_通信与调度规则.md（C-03）",
+        _ => "Document/Ruler/00_规则索引.md"
     };
 
     /// <summary>Part 子类允许的基类型名。</summary>

@@ -55,13 +55,13 @@
 
 | 类型 | 引用 |
 |---|---|
-| 规则 | `Ruler/04_测试模块规则.md` T-01 ~ T-07、V-01 ~ V-16 |
+| 规则 | `Document/Ruler/04_测试模块规则.md` T-01 ~ T-07、V-01 ~ V-16 |
 | 文档 | `测试模块设计方案_PCTest测试序列_V1.1.docx` 第 2 章 |
 | 下游 | Data（结果与明细）、Error（报警）、Ui（看板） |
 
 ## 五、验证记录
 
-自动化用例位于 `tests/MultiStation.Ui.Smoke`（`RunBatChecks`），随套件执行，`SUMMARY failures=0`。
+自动化用例位于 `tools/MultiStation.Ui.Smoke`（`RunBatChecks`），随套件执行，`SUMMARY failures=0`。
 
 | 编号 | 场景 | 期望 | 实测 |
 |---|---|---|---|

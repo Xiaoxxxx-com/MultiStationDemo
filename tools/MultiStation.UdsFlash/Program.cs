@@ -140,10 +140,10 @@ internal static class Program
             ECU 烧录测试脚本（UDS over ISO-TP / ZLG USBCANFD-400U）
 
             离线验证：
-              dotnet run --project tests\MultiStation.UdsFlash -- --sim [--size 4096]
+              dotnet run --project tools\MultiStation.UdsFlash -- --sim [--size 4096]
 
             真实 ECU：
-              dotnet run --project tests\MultiStation.UdsFlash -- --hardware --file app.bin ^
+              dotnet run --project tools\MultiStation.UdsFlash -- --hardware --file app.bin ^
                 [--channel 0:0] [--mode classic|fd] [--baud 500000] [--data-baud 2000000] ^
                 [--tx 7E0] [--rx 7E8] [--address 08000000] [--fingerprint MULTISTATION] [--no-erase]
 

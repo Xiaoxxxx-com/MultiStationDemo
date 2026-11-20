@@ -250,10 +250,10 @@ public sealed class SingleStationTestController : IDisposable
     private bool _batRunning;
     private bool _stepCommitted;
 
-    public SingleStationTestController()
+    public SingleStationTestController(IReadOnlyList<TestSequenceRow> rows)
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
-        Steps = new ObservableCollection<TestStepVm>(TestSequenceData.Rows.Select(row => new TestStepVm(row)));
+        Steps = new ObservableCollection<TestStepVm>(rows.Select(row => new TestStepVm(row)));
 
         Parameters =
         [

@@ -47,7 +47,12 @@ public partial class ModelSwitchWindow : Window
         }
 
         var model = _models[index];
+        var isFlash = model.Kind == ModelKind.Flash;
         _loading = true;
+        TxtKind.Text = isFlash ? "ECU 烧录机种" : "通用测试机种";
+        TxtKindHint.Visibility = isFlash ? Visibility.Collapsed : Visibility.Visible;
+        FlashParamGrid.Visibility = isFlash ? Visibility.Visible : Visibility.Collapsed;
+        TxtName.IsEnabled = !isFlash;
         TxtName.Text = model.Name;
         TxtFirmware.Text = model.FirmwarePath ?? string.Empty;
         TxtDeviceIndex.Text = model.CanDeviceIndex.ToString(CultureInfo.InvariantCulture);
@@ -87,7 +92,7 @@ public partial class ModelSwitchWindow : Window
 
         try
         {
-            var model = CollectForm();
+            var model = CollectForm(index);
             _models[index] = model;
             _store.Save(_models);
             RefreshList(model.Name);
@@ -107,9 +112,11 @@ public partial class ModelSwitchWindow : Window
         }
     }
 
-    private ModelProfile CollectForm()
+    private ModelProfile CollectForm(int index)
     {
-        var name = TxtName.Text.Trim();
+        var existing = _models[index];
+        // ECU 烧录机种为内置机种，名称与类型固定；通用机种名称可编辑
+        var name = existing.Kind == ModelKind.Flash ? existing.Name : TxtName.Text.Trim();
         if (name.Length == 0)
         {
             throw new FormatException("机种名称不能为空");
@@ -126,6 +133,7 @@ public partial class ModelSwitchWindow : Window
 
         return new ModelProfile
         {
+            Kind = existing.Kind,
             Name = name,
             FirmwarePath = string.IsNullOrWhiteSpace(TxtFirmware.Text) ? null : TxtFirmware.Text.Trim(),
             CanDeviceIndex = deviceIndex,
@@ -183,16 +191,24 @@ public partial class ModelSwitchWindow : Window
 
     private void OnDeleteModel(object sender, RoutedEventArgs e)
     {
-        if (_models.Count <= 1)
-        {
-            TxtError.Foreground = System.Windows.Media.Brushes.Firebrick;
-            TxtError.Text = "至少保留一个机种";
-            return;
-        }
-
         var index = ModelList.SelectedIndex;
         if (index < 0)
         {
+            return;
+        }
+
+        var selected = _models[index];
+        if (selected.Kind == ModelKind.Flash)
+        {
+            TxtError.Foreground = System.Windows.Media.Brushes.Firebrick;
+            TxtError.Text = "ECU 烧录机种为内置机种，不可删除";
+            return;
+        }
+
+        if (_models.Count(model => model.Kind == ModelKind.Test) <= 1)
+        {
+            TxtError.Foreground = System.Windows.Media.Brushes.Firebrick;
+            TxtError.Text = "至少保留一个通用测试机种";
             return;
         }
 

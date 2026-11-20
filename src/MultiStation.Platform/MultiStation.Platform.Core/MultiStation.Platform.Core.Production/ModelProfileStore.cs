@@ -44,6 +44,12 @@ public sealed class ModelProfileStore
                     File.ReadAllText(_filePath), JsonOptions);
                 if (models is { Count: > 0 })
                 {
+                    // 老版本配置没有 ECU 烧录机种，升级后自动补齐内置机种
+                    if (EnsureBuiltInModels(models))
+                    {
+                        Save(models);
+                    }
+
                     return models;
                 }
             }
@@ -83,8 +89,29 @@ public sealed class ModelProfileStore
         File.WriteAllText(_selectedPath, modelName);
     }
 
+    /// <summary>保证内置 ECU 烧录机种始终存在；返回是否发生变更。</summary>
+    private static bool EnsureBuiltInModels(List<ModelProfile> models)
+    {
+        if (models.Any(model => model.Kind == ModelKind.Flash))
+        {
+            return false;
+        }
+
+        models.Add(CreateFlashModel());
+        return true;
+    }
+
     public static IReadOnlyList<ModelProfile> CreateDefaults() =>
     [
-        new ModelProfile { Name = "通用机种", Remark = "默认烧录参数，可在机种切换中修改" },
+        new ModelProfile { Name = "通用机种", Remark = "通用测试机种，可在机种切换中新增并维护" },
+        CreateFlashModel(),
     ];
+
+    /// <summary>内置 ECU 烧录机种：共用测试界面，切换后加载烧录测试序列。</summary>
+    private static ModelProfile CreateFlashModel() => new()
+    {
+        Name = "ECU 烧录",
+        Kind = ModelKind.Flash,
+        Remark = "独立烧录机种：共用测试界面，切换后加载烧录测试序列",
+    };
 }

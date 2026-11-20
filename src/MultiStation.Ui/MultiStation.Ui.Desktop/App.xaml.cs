@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using MultiStation.Platform.Core.Production;
 using MultiStation.Platform.Security;
 
 namespace MultiStation.Ui.Desktop;
@@ -93,13 +94,18 @@ public partial class App : Application
                 }
             }
 
-            var window = new MainWindow();
-            MainWindow = window;
-            // 主窗口就绪后恢复为「主窗口关闭即退出」
-            ShutdownMode = ShutdownMode.OnMainWindowClose;
-            window.Show();
-
+            // 按上次选中的机种打开对应窗口套件：通用测试机种 → 测试主界面，ECU 烧录机种 → 独立烧录界面
+            var models = ModelStore.Load();
+            var selected = models.FirstOrDefault(m => m.Name == ModelStore.LoadSelected()) ?? models[0];
             if (isSmoke)
+            {
+                // 冒烟自检固定使用通用测试机种，避免被上次选中的烧录机种影响
+                selected = models.FirstOrDefault(m => m.Kind == ModelKind.Test) ?? selected;
+            }
+
+            ShowModelShell(selected, persistSelection: false);
+
+            if (isSmoke && ModelShell is MainWindow window)
             {
                 // 冒烟自检同样遵守 T-07：启动测试前必须人工确认，未确认则只做界面自检
                 var smokeTestConfirmed = window.ConfirmSmokeTestStart();
@@ -131,7 +137,7 @@ public partial class App : Application
                     }
                     else if (tick == 4)
                     {
-                        if (window.FindName("NavHistory") is RadioButton history)
+                        if (window.TestView?.FindName("NavHistory") is RadioButton history)
                         {
                             history.IsChecked = true;
                         }
@@ -139,7 +145,7 @@ public partial class App : Application
                     else if (tick == 5)
                     {
                         CaptureWindow(window, Path.Combine(temp, "multistation-ui-history.png"));
-                        if (window.FindName("NavAlarms") is RadioButton alarms)
+                        if (window.TestView?.FindName("NavAlarms") is RadioButton alarms)
                         {
                             alarms.IsChecked = true;
                         }
@@ -151,7 +157,7 @@ public partial class App : Application
                     else if (tick >= 7)
                     {
                         timer.Stop();
-                        if (window.FindName("HistoryGrid") is DataGrid grid)
+                        if (window.TestView?.FindName("HistoryGrid") is DataGrid grid)
                         {
                             File.WriteAllText(
                                 Path.Combine(temp, "multistation-smoke.txt"),
@@ -172,6 +178,56 @@ public partial class App : Application
             WriteCrashLog(ex);
             Shutdown(1);
         }
+    }
+
+    private ModelProfileStore? _modelStore;
+
+    /// <summary>机种配置存储：机种切换窗口与窗口套件切换共用。</summary>
+    internal ModelProfileStore ModelStore => _modelStore ??= new ModelProfileStore();
+
+    /// <summary>当前机种。</summary>
+    internal ModelProfile? CurrentModel { get; private set; }
+
+    /// <summary>当前机种对应的窗口套件主窗口。</summary>
+    internal Window? ModelShell { get; private set; }
+
+    /// <summary>
+    /// 切换机种：关闭当前机种窗口，再重新打开外壳并挂载新机种的 UI 视图。
+    /// </summary>
+    internal async Task SwitchModelAsync(ModelProfile model)
+    {
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var previous = ModelShell;
+        ModelShell = null;
+
+        if (previous is MainWindow main)
+        {
+            // 测试线需要优雅停机（停投料 → 停调度器 → 停工位 → 停设备）后再关闭
+            await main.ShutdownAsync();
+            main.Close();
+        }
+        else
+        {
+            previous?.Close();
+        }
+
+        ShowModelShell(model, persistSelection: true);
+    }
+
+    /// <summary>按机种打开界面；ECU 烧录与通用机种共用同一套窗口，仅测试序列不同。</summary>
+    private void ShowModelShell(ModelProfile model, bool persistSelection)
+    {
+        if (persistSelection)
+        {
+            ModelStore.SaveSelected(model.Name);
+        }
+
+        CurrentModel = model;
+        ModelShell = new MainWindow(model);
+        MainWindow = ModelShell;
+        // 窗口套件就绪后恢复为「主窗口关闭即退出」
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
+        ModelShell.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -1,0 +1,122 @@
+﻿<UserControl x:Class="MultiStation.Ui.Desktop.FlashModelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F4F6FA" Foreground="#1F2937"
+             FontFamily="Microsoft YaHei UI" FontSize="13">
+    <Grid Margin="24,14,24,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 烧录机种信息 -->
+        <Border Grid.Row="0" Style="{StaticResource SectionCard}" Padding="14,12" Margin="0,0,0,4">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="ECU 烧录" FontSize="20" FontWeight="Bold" />
+                    <TextBlock x:Name="TxtModelName" Foreground="{StaticResource MutedBrush}" FontSize="12"
+                               Margin="12,6,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock x:Name="TxtModelInfo" Grid.Row="1" Foreground="{StaticResource MutedBrush}"
+                           FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0" />
+            </Grid>
+        </Border>
+
+        <!-- 烧录序列 + 日志 -->
+        <Grid Grid.Row="1" Margin="0,4,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="1*" MinWidth="320" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource SectionCard}" Padding="12,10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="2,0,2,8">
+                        <TextBlock Text="烧录流程" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtTestState" Text="待开始" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <TextBlock x:Name="TxtProgress" Text="0 / 0" Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                    <DataGrid x:Name="StepGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="None"
+                              Background="Transparent" BorderThickness="0" RowBackground="Transparent"
+                              AlternationCount="2" SelectionMode="Single" SelectionUnit="FullRow"
+                              RowStyle="{StaticResource GridRow}" CellStyle="{StaticResource GridCell}"
+                              ColumnHeaderStyle="{StaticResource GridHeader}" Foreground="#1F2937" RowHeight="26"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="阶段" Binding="{Binding Stage}" Width="80" ElementStyle="{StaticResource GridText}" />
+                            <DataGridTextColumn Header="序号" Binding="{Binding Number}" Width="50" ElementStyle="{StaticResource GridText}" />
+                            <DataGridTextColumn Header="编号" Binding="{Binding Code}" Width="180" ElementStyle="{StaticResource GridTextTip}" />
+                            <DataGridTextColumn Header="烧录步骤" Binding="{Binding Project}" Width="150" ElementStyle="{StaticResource GridTextTip}" />
+                            <DataGridTextColumn Header="类型" Binding="{Binding Kind}" Width="70" ElementStyle="{StaticResource GridText}" />
+                            <DataGridTextColumn Header="设备" Binding="{Binding Device}" Width="130" ElementStyle="{StaticResource GridTextTip}" />
+                            <DataGridTextColumn Header="设备指令定义" Binding="{Binding Command}" Width="300" ElementStyle="{StaticResource GridTextTip}" />
+                            <DataGridTextColumn Header="超时(ms)" Binding="{Binding TimeoutMs}" Width="80" ElementStyle="{StaticResource GridText}" />
+                            <DataGridTextColumn Header="实测值" Binding="{Binding Measured}" Width="110" ElementStyle="{StaticResource GridTextTip}" />
+                            <DataGridTemplateColumn Header="结果" Width="70">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Result}" Foreground="{Binding ResultBrush}" FontWeight="SemiBold" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="耗时(s)" Binding="{Binding Duration}" Width="80" ElementStyle="{StaticResource GridText}" />
+                            <DataGridTextColumn Header="时间" Binding="{Binding Time}" Width="80" ElementStyle="{StaticResource GridText}" />
+                            <DataGridTextColumn Header="备注" Binding="{Binding Remark}" Width="320" ElementStyle="{StaticResource GridTextTip}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource SectionCard}" Padding="12,10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="烧录日志" FontWeight="SemiBold" Margin="2,0,2,8" />
+                    <ListBox x:Name="FlashLogList" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 控制与状态 -->
+        <Border Grid.Row="2" Style="{StaticResource SectionCard}" Padding="12,10">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="BtnFlashStart" Content="开始烧录" Click="OnStart"
+                            Style="{StaticResource SmallGhostButton}" Background="#2563EB" Foreground="White" />
+                    <Button x:Name="BtnFlashPause" Content="暂停" Click="OnPause"
+                            Style="{StaticResource SmallGhostButton}" />
+                    <Button x:Name="BtnFlashStop" Content="停止" Click="OnStop"
+                            Style="{StaticResource SmallGhostButton}" />
+                    <Button x:Name="BtnFlashNext" Content="下一步" Click="OnNext"
+                            Style="{StaticResource SmallGhostButton}" />
+                </StackPanel>
+                <TextBlock x:Name="TxtFlashStatus" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedBrush}" FontSize="12" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
