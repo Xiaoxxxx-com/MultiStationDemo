@@ -89,6 +89,14 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="烧录参数" FontWeight="SemiBold"
@@ -109,47 +117,97 @@
                         <TextBox x:Name="TxtDeviceIndex" Grid.Row="2" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="3" Text="通道序号" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtChannelIndex" Grid.Row="3" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="3" Text="CAN 设备型号" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <ComboBox x:Name="CmbDeviceModel" Grid.Row="3" Grid.Column="1" Height="30" Margin="0,0,0,10">
+                            <ComboBoxItem Content="400U" />
+                            <ComboBoxItem Content="200U" />
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="4" Text="通道序号" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtChannelIndex" Grid.Row="4" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="4" Text="通道模式" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <ComboBox x:Name="CmbMode" Grid.Row="4" Grid.Column="1" Height="30" Margin="0,0,0,10">
+                        <TextBlock Grid.Row="5" Text="通道模式" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <ComboBox x:Name="CmbMode" Grid.Row="5" Grid.Column="1" Height="30" Margin="0,0,0,10">
                             <ComboBoxItem Content="classic" />
                             <ComboBoxItem Content="fd" />
                         </ComboBox>
 
-                        <TextBlock Grid.Row="5" Text="仲裁波特率" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtBaud" Grid.Row="5" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="6" Text="仲裁波特率" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtBaud" Grid.Row="6" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="6" Text="数据波特率" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtDataBaud" Grid.Row="6" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="7" Text="数据波特率" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtDataBaud" Grid.Row="7" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="7" Text="请求 ID（hex）" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtRequestId" Grid.Row="7" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="8" Text="请求 ID（hex）" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtRequestId" Grid.Row="8" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="8" Text="响应 ID（hex）" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtResponseId" Grid.Row="8" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="9" Text="响应 ID（hex）" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtResponseId" Grid.Row="9" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="9" Text="烧录地址（hex）" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtAddress" Grid.Row="9" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="10" Text="烧录地址（hex）" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtAddress" Grid.Row="10" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="10" Text="安全等级" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtSecurityLevel" Grid.Row="10" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="11" Text="安全等级" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtSecurityLevel" Grid.Row="11" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="11" Text="指纹" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <TextBox x:Name="TxtFingerprint" Grid.Row="11" Grid.Column="1" Height="30" Padding="6,4"
+                        <TextBlock Grid.Row="12" Text="指纹" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtFingerprint" Grid.Row="12" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10" />
 
-                        <TextBlock Grid.Row="12" Text="烧录前擦除" VerticalAlignment="Center" Margin="0,0,8,10" />
-                        <CheckBox x:Name="ChkErase" Grid.Row="12" Grid.Column="1" Content="执行擦除例程 0xFF00"
+                        <TextBlock Grid.Row="13" Text="烧录前擦除" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <CheckBox x:Name="ChkErase" Grid.Row="13" Grid.Column="1" Content="执行擦除例程 0xFF00"
                                   VerticalAlignment="Center" Margin="0,0,0,10" />
+
+                        <TextBlock Grid.Row="14" Text="电源串口" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtPowerPort" Grid.Row="14" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="IT6322A 串口名，如 COM3；留空则烧录前不上电" />
+
+                        <TextBlock Grid.Row="15" Text="电源电压(V)" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtPowerVoltage" Grid.Row="15" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="NP12 填 12，NP13 填 24；0 表示不上电" />
+
+                        <TextBlock Grid.Row="16" Text="电源限流(A)" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtPowerCurrent" Grid.Row="16" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="IT6322A CH1 限流，默认 3A" />
+
+                        <TextBlock Grid.Row="17" Text="串口参数" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtPowerSerial" Grid.Row="17" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="波特率,数据位,校验(N/E/O),停止位(1/2)，默认 9600,8,N,1" />
+
+                        <TextBlock Grid.Row="18" Text="输出通道" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <ComboBox x:Name="CmbPowerChannel" Grid.Row="18" Grid.Column="1" Height="30" Margin="0,0,0,10">
+                            <ComboBoxItem Content="CH1" />
+                            <ComboBoxItem Content="CH2" />
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="19" Text="报告目录" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <Grid Grid.Row="19" Grid.Column="1" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="TxtReportDirectory" Height="30" Padding="6,4"
+                                     VerticalContentAlignment="Center"
+                                     ToolTip="支持 {Model}、{Date} 等占位符；留空表示不生成报告" />
+                            <Button Grid.Column="1" Content="浏览…" Width="72" Height="30" Margin="8,0,0,0"
+                                    Click="OnBrowseReportDirectory" />
+                        </Grid>
+
+                        <TextBlock Grid.Row="20" Text="报告文件名" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtReportFileName" Grid.Row="20" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="{}{Model} {SN} {CarrierID} {ShellCode} {Verdict} {Date} {Time} {DateTime}，如 {Model}_{SN}_{DateTime}.txt" />
                     </Grid>
 
                     <TextBlock x:Name="TxtError" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,8,0,0" />

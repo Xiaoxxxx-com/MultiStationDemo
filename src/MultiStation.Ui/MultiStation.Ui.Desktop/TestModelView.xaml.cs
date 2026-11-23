@@ -73,6 +73,11 @@ public partial class TestModelView : UserControl, IModelView
     {
         InitializeComponent();
 
+        var preferences = BasicInfoPreferences.Load();
+        _useSn = preferences.UseSn;
+        _useCarrierId = preferences.UseCarrierId;
+        _useShellCode = preferences.UseShellCode;
+
         var logDirectory = LogPaths.ResolveLogDirectory();
 
         _host = new TestLineHost(logDirectory);
@@ -237,6 +242,12 @@ public partial class TestModelView : UserControl, IModelView
         _useSn = dialog.UseSn;
         _useCarrierId = dialog.UseCarrierId;
         _useShellCode = dialog.UseShellCode;
+        new BasicInfoPreferences
+        {
+            UseSn = _useSn,
+            UseCarrierId = _useCarrierId,
+            UseShellCode = _useShellCode,
+        }.Save();
         ApplyBasicInfoValues(dialog.Sn, dialog.CarrierId, dialog.ShellCode);
         RefreshBasicInfoState();
     }

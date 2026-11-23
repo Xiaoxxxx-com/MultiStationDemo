@@ -49,6 +49,7 @@ public partial class MainWindow : Window, IDisposable
         TxtModelName.Text = model.Name;
         ApplyTitle();
         LoadStationName();
+        ApplyFlashStationTitle(model);
         LoadLogo();
 
         // 每种机种挂载自己的 UI 视图
@@ -103,6 +104,22 @@ public partial class MainWindow : Window, IDisposable
         Title = title;
     }
 
+    private async void OnPreviousModel(object sender, RoutedEventArgs e) =>
+        await SwitchRelativeModelAsync(-1);
+
+    private async void OnNextModel(object sender, RoutedEventArgs e) =>
+        await SwitchRelativeModelAsync(1);
+
+    private async Task SwitchRelativeModelAsync(int delta)
+    {
+        if (!RequirePermission(PermissionKind.Configure))
+        {
+            return;
+        }
+
+        await RunModelSwitchAsync(() => ((App)Application.Current).SwitchModelRelativeAsync(delta));
+    }
+
     /// <summary>机种切换：由 App 关闭当前窗口套件并打开新机种的窗口套件。</summary>
     private async void OnSwitchModel(object sender, RoutedEventArgs e)
     {
@@ -112,12 +129,35 @@ public partial class MainWindow : Window, IDisposable
         }
 
         var dialog = new ModelSwitchWindow(_modelStore, _currentModel) { Owner = this };
-        if (dialog.ShowDialog() != true || dialog.SelectedModel is null)
+        if (dialog.ShowDialog() != true || dialog.SelectedModel is not { } selectedModel)
         {
             return;
         }
 
-        await ((App)Application.Current).SwitchModelAsync(dialog.SelectedModel);
+        await RunModelSwitchAsync(() => ((App)Application.Current).SwitchModelAsync(selectedModel));
+    }
+
+    private async Task RunModelSwitchAsync(Func<Task> switchAction)
+    {
+        SetModelSwitchButtons(false);
+        try
+        {
+            await switchAction();
+        }
+        finally
+        {
+            if (!_closing)
+            {
+                SetModelSwitchButtons(true);
+            }
+        }
+    }
+
+    private void SetModelSwitchButtons(bool enabled)
+    {
+        BtnModelPrevious.IsEnabled = enabled;
+        BtnModelNext.IsEnabled = enabled;
+        BtnModelSwitch.IsEnabled = enabled;
     }
 
     private void OnOpenHistoryWindow(object sender, RoutedEventArgs e) => TestView?.OpenHistoryWindow();
@@ -198,6 +238,15 @@ public partial class MainWindow : Window, IDisposable
         }
 
         TxtStationName.Text = name;
+    }
+
+    /// <summary>外部烧录机种（NP12/NP13）的页面大标题显示对应烧录标题。</summary>
+    private void ApplyFlashStationTitle(ModelProfile model)
+    {
+        if (model.Kind == ModelKind.Flash && !string.IsNullOrWhiteSpace(model.FlashSequencePath))
+        {
+            TxtStationName.Text = $"{model.Name} 烧录";
+        }
     }
 
     private void LoadLogo()
@@ -293,7 +342,8 @@ public partial class MainWindow : Window, IDisposable
 
         e.Cancel = true;
         await ShutdownAsync();
-        Close();
+        // 停机可能同步完成；待当前 Closing 事件返回后再关闭，避免重复进入关闭流程。
+        _ = Dispatcher.BeginInvoke(Close);
     }
 
     /// <summary>释放资源：停止时钟并释放当前机种视图。</summary>

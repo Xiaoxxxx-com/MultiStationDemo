@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+﻿﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -133,6 +133,15 @@ public sealed class TestStepVm(TestSequenceRow row) : INotifyPropertyChanged
         ResultBrush = StopBrush;
     }
 
+    public void MarkSkipped()
+    {
+        Measured = "-";
+        Result = "已跳过";
+        ResultBrush = StopBrush;
+        Duration = "-";
+        Time = "-";
+    }
+
     public void Reset()
     {
         Measured = "-";
@@ -240,6 +249,8 @@ public sealed class SingleStationTestController : IDisposable
     private readonly Dispatcher _dispatcher;
     private static readonly char[] _newLineChars = ['\r', '\n'];
     private readonly Random _random = new();
+    private readonly IReadOnlyList<TestSequenceRow> _rows;
+    private readonly IUdsStepExecutor? _udsExecutor;
     private int _current = -1;
     private bool _running;
     private bool _paused;
@@ -248,11 +259,20 @@ public sealed class SingleStationTestController : IDisposable
     private int _session;
     private CancellationTokenSource? _batCts;
     private bool _batRunning;
+    private CancellationTokenSource? _udsCts;
+    private bool _udsRunning;
     private bool _stepCommitted;
+    private Task _cleanupTask = Task.CompletedTask;
+    private Task? _shutdownTask;
+    private bool _disposed;
 
-    public SingleStationTestController(IReadOnlyList<TestSequenceRow> rows)
+    public SingleStationTestController(
+        IReadOnlyList<TestSequenceRow> rows,
+        IUdsStepExecutor? udsExecutor = null)
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
+        _rows = rows;
+        _udsExecutor = udsExecutor;
         Steps = new ObservableCollection<TestStepVm>(rows.Select(row => new TestStepVm(row)));
 
         Parameters =
@@ -292,6 +312,12 @@ public sealed class SingleStationTestController : IDisposable
 
     public bool IsStepMode => _stepMode;
 
+    /// <summary>Bat 或 UDS 原子步骤仍在执行时，暂停和单步不得并发推进。</summary>
+    public bool IsOperationRunning => _batRunning || _udsRunning;
+
+    /// <summary>执行器释放完成前禁止下一件开始，避免与 AutoLoader 争用 CAN。</summary>
+    public bool IsCleaningUp => !_cleanupTask.IsCompleted;
+
     public int PassCount { get; private set; }
 
     public int NgCount { get; private set; }
@@ -302,7 +328,7 @@ public sealed class SingleStationTestController : IDisposable
 
     public void Start()
     {
-        if (_running)
+        if (_running || _shutdownTask is not null || IsCleaningUp || Steps.Count == 0)
         {
             return;
         }
@@ -348,11 +374,33 @@ public sealed class SingleStationTestController : IDisposable
         Changed?.Invoke();
     }
 
-    /// <summary>释放资源：停止计时器与批处理任务。</summary>
+    /// <summary>停止当前序列并等待 CAN 释放；视图切换时必须等待此任务。</summary>
+    public Task ShutdownAsync()
+    {
+        if (_shutdownTask is not null)
+        {
+            return _shutdownTask;
+        }
+
+        Stop();
+        BeginExecutorCleanup();
+        _shutdownTask = _cleanupTask;
+        return _shutdownTask;
+    }
+
+    /// <summary>释放资源：停止计时器、取消后台步骤并关闭执行器。</summary>
     public void Dispose()
     {
-        Stop();
+        if (_disposed)
+        {
+            return;
+        }
+
+        ShutdownAsync().GetAwaiter().GetResult();
         _timer.Stop();
+        _udsExecutor?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 
     public void Stop()
@@ -364,6 +412,7 @@ public sealed class SingleStationTestController : IDisposable
 
         _timer.Stop();
         CancelBat();
+        CancelUds();
         _running = false;
         _paused = false;
         _stepMode = false;
@@ -379,6 +428,7 @@ public sealed class SingleStationTestController : IDisposable
         Verdict = "已停止";
         StateText = "已停止";
         AddLog("测试停止");
+        BeginExecutorCleanup();
         Changed?.Invoke();
     }
 
@@ -386,6 +436,11 @@ public sealed class SingleStationTestController : IDisposable
     {
         if (!_running)
         {
+            if (_shutdownTask is not null || IsCleaningUp || Steps.Count == 0)
+            {
+                return;
+            }
+
             ResetSession();
             _running = true;
             _paused = true;
@@ -423,8 +478,8 @@ public sealed class SingleStationTestController : IDisposable
             return;
         }
 
-        // Bat 步骤在后台执行，完成前不推进序列
-        if (_batRunning)
+        // Bat / UDS 步骤在后台执行，完成前不推进序列
+        if (IsOperationRunning)
         {
             return;
         }
@@ -456,8 +511,8 @@ public sealed class SingleStationTestController : IDisposable
             return;
         }
 
-        // Bat 步骤的结果由批处理回调写入，这里不参与随机模拟
-        if (step.IsBat)
+        // Bat / 真实 UDS 步骤的结果由后台回调写入，这里不参与随机模拟
+        if (step.IsBat || ShouldExecuteUds(step))
         {
             return;
         }
@@ -493,7 +548,17 @@ public sealed class SingleStationTestController : IDisposable
         {
             BeginBat(index, step);
         }
+        else if (ShouldExecuteUds(step))
+        {
+            BeginUds(index, step);
+        }
     }
+
+    private bool ShouldExecuteUds(TestStepVm step) =>
+        _udsExecutor is not null
+        && step.Command.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Any(segment => segment.Trim().StartsWith("PDU=", StringComparison.OrdinalIgnoreCase))
+        && step.Command.Contains("COM=UDS", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>启动 Bat 步骤：后台执行，完成后回到界面线程写结果。</summary>
     private void BeginBat(int index, TestStepVm step)
@@ -572,13 +637,141 @@ public sealed class SingleStationTestController : IDisposable
             AddLog($"[bat] {line}");
         }
 
-        if (!result.Passed)
+        var isPreOrMain = step.Stage is "PreSeq" or "MainSeq";
+        var isPost = string.Equals(step.Stage, "PostSeq", StringComparison.OrdinalIgnoreCase);
+        if (!result.Passed && !isPost)
         {
             _hasNg = true;
         }
 
         _stepCommitted = true;
+        if (!result.Passed && isPreOrMain)
+        {
+            if (TryMoveToPostSeq("Bat"))
+            {
+                Changed?.Invoke();
+                return;
+            }
+
+            AddLog("未找到 PostSeq，终止后续步骤");
+            FinishSession();
+            return;
+        }
+
         Changed?.Invoke();
+    }
+
+    /// <summary>启动真实 UDS 步骤；执行器只在首个诊断请求时打开 CAN。</summary>
+    private void BeginUds(int index, TestStepVm step)
+    {
+        _stepCommitted = false;
+        _udsRunning = true;
+        _udsCts = new CancellationTokenSource();
+
+        var session = _session;
+        var token = _udsCts.Token;
+        AddLog($"步骤 {index + 1} 执行真实 UDS（超时 {step.TimeoutMs} ms）");
+        _ = RunUdsAsync(index, step, session, token);
+    }
+
+    private async Task RunUdsAsync(
+        int index,
+        TestStepVm step,
+        int session,
+        CancellationToken token)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        UdsStepResult result;
+        try
+        {
+            result = await _udsExecutor!.ExecuteAsync(_rows[index], token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // 停止或视图关闭已更新当前行，取消回调不再改写结果
+            return;
+        }
+        catch (Exception ex)
+        {
+            result = new UdsStepResult(false, "失败", $"执行异常：{ex.Message}");
+        }
+
+        stopwatch.Stop();
+        _ = _dispatcher.BeginInvoke(() => OnUdsCompleted(
+            index, step, session, result, stopwatch.Elapsed.TotalMilliseconds));
+    }
+
+    private void OnUdsCompleted(
+        int index,
+        TestStepVm step,
+        int session,
+        UdsStepResult result,
+        double elapsedMs)
+    {
+        if (session != _session || !_running || index != _current)
+        {
+            return;
+        }
+
+        _udsRunning = false;
+        _udsCts?.Dispose();
+        _udsCts = null;
+
+        step.Complete(result.Passed, result.Measured, elapsedMs);
+        AddLog($"步骤 {index + 1} {step.Project} {(result.Passed ? "PASS" : "NG")} · " +
+               $"{result.Measured} · {elapsedMs:F0} ms · {result.Detail}");
+
+        var isPreOrMain = step.Stage is "PreSeq" or "MainSeq";
+        var isPost = string.Equals(step.Stage, "PostSeq", StringComparison.OrdinalIgnoreCase);
+        if (!result.Passed && !isPost)
+        {
+            _hasNg = true;
+        }
+
+        _stepCommitted = true;
+        if (!result.Passed && isPreOrMain)
+        {
+            if (TryMoveToPostSeq("UDS"))
+            {
+                Changed?.Invoke();
+                return;
+            }
+
+            AddLog("未找到 PostSeq，终止后续步骤");
+            FinishSession();
+            return;
+        }
+
+        Changed?.Invoke();
+    }
+
+    private bool TryMoveToPostSeq(string source)
+    {
+        var postIndex = -1;
+        for (var i = _current + 1; i < Steps.Count; i++)
+        {
+            if (string.Equals(Steps[i].Stage, "PostSeq", StringComparison.OrdinalIgnoreCase))
+            {
+                postIndex = i;
+                break;
+            }
+        }
+
+        if (postIndex < 0)
+        {
+            return false;
+        }
+
+        var skippedCount = postIndex - _current - 1;
+        for (var i = _current + 1; i < postIndex; i++)
+        {
+            Steps[i].MarkSkipped();
+        }
+
+        _current = postIndex - 1;
+        StateText = "前段失败，转入后段清理";
+        AddLog($"{source} 步骤失败，跳过 {skippedCount} 个前段步骤，转入 PostSeq");
+        return true;
     }
 
     /// <summary>截取脚本文本输出的前若干行，避免刷屏。</summary>
@@ -646,6 +839,22 @@ public sealed class SingleStationTestController : IDisposable
         _batRunning = false;
     }
 
+    private void CancelUds()
+    {
+        try
+        {
+            _udsCts?.Cancel();
+        }
+        catch (Exception)
+        {
+            // 已释放或已取消
+        }
+
+        _udsCts?.Dispose();
+        _udsCts = null;
+        _udsRunning = false;
+    }
+
     private string BuildMeasured(TestStepVm step, bool passed)
     {
         if (!string.IsNullOrEmpty(step.Equal))
@@ -687,6 +896,7 @@ public sealed class SingleStationTestController : IDisposable
     {
         _timer.Stop();
         CancelBat();
+        CancelUds();
         _running = false;
         _paused = false;
         _stepMode = false;
@@ -708,13 +918,44 @@ public sealed class SingleStationTestController : IDisposable
         }
 
         AddLog($"测试完成：{Verdict}");
+        BeginExecutorCleanup();
         Changed?.Invoke();
+    }
+
+    private void BeginExecutorCleanup()
+    {
+        if (_udsExecutor is null || !_cleanupTask.IsCompleted)
+        {
+            return;
+        }
+
+        _cleanupTask = CloseExecutorAsync();
+    }
+
+    private async Task CloseExecutorAsync()
+    {
+        string? error = null;
+        try
+        {
+            await _udsExecutor!.CloseAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
+        _ = _dispatcher.BeginInvoke(() =>
+        {
+            AddLog(error is null ? "CAN 资源已释放" : $"CAN 资源释放失败：{error}");
+            Changed?.Invoke();
+        });
     }
 
     private void ResetSession()
     {
         _timer.Stop();
         CancelBat();
+        CancelUds();
         _current = -1;
         _hasNg = false;
         _stepCommitted = false;

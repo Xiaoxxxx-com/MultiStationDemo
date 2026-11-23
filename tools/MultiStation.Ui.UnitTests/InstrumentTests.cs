@@ -1,7 +1,9 @@
+using System.IO.Ports;
 using System.Runtime.InteropServices;
 using System.Text;
 using MultiStation.Instruments;
 using MultiStation.Instruments.Drivers.GwInstek;
+using MultiStation.Instruments.Drivers.Itech;
 using MultiStation.Instruments.Drivers.Zlg;
 using MultiStation.Instruments.Protocol.Can.Algorithm;
 using MultiStation.Instruments.Protocol.Can.Physical;
@@ -174,6 +176,66 @@ internal static class InstrumentTests
             flashResult.TotalBytes == firmware.Length && flashResult.Blocks > 0
                 && ecu.DownloadedSize == firmware.Length && flashResult.Vin.StartsWith("LSV", StringComparison.Ordinal),
             $"bytes={flashResult.TotalBytes} blocks={flashResult.Blocks} ecuBytes={ecu.DownloadedSize} vin={flashResult.Vin}");
+
+        // INS-13 ZLG 设备型号映射：400U=76、200U=41，空值默认 200U，未知型号拒绝
+        var device400 = ZlgCanApi.ResolveDeviceType("400U");
+        var device200 = ZlgCanApi.ResolveDeviceType("200U");
+        var deviceDefault = ZlgCanApi.ResolveDeviceType(null);
+        var unknownRejected = false;
+        try
+        {
+            ZlgCanApi.ResolveDeviceType("100U");
+        }
+        catch (FormatException)
+        {
+            unknownRejected = true;
+        }
+
+        Program.Check("INS-13",
+            device400 == 76 && device200 == 41 && deviceDefault == 41 && unknownRejected
+                && ZlgCanApi.DescribeDevice(41) == "USBCANFD-200U",
+            $"400U={device400} 200U={device200} default={deviceDefault} unknown={unknownRejected}");
+
+        // INS-14 IT6322A 串口参数：默认 9600,8,N,1，可改波特率/数据位/校验/停止位
+        var powerDefault = It6322aPowerSupply.ParseSettings(null);
+        var powerCustom = It6322aPowerSupply.ParseSettings("19200,7,E,2");
+        var powerInvalid = false;
+        try
+        {
+            It6322aPowerSupply.ParseSettings("9600,8,X,1");
+        }
+        catch (FormatException)
+        {
+            powerInvalid = true;
+        }
+
+        Program.Check("INS-14",
+            powerDefault.BaudRate == 9600 && powerDefault.DataBits == 8
+                && powerDefault.Parity == Parity.None && powerDefault.StopBits == StopBits.One
+                && powerCustom.BaudRate == 19200 && powerCustom.DataBits == 7
+                && powerCustom.Parity == Parity.Even && powerCustom.StopBits == StopBits.Two
+                && powerInvalid,
+            $"default={powerDefault.BaudRate},{powerDefault.DataBits},{powerDefault.Parity},{powerDefault.StopBits} " +
+            $"custom={powerCustom.BaudRate},{powerCustom.DataBits},{powerCustom.Parity},{powerCustom.StopBits} " +
+            $"invalid={powerInvalid}");
+
+        // INS-15 IT6322A 输出通道：CH1/CH2 可选，其他通道拒绝
+        var channel1 = It6322aPowerSupply.ChannelCommand(1);
+        var channel2 = It6322aPowerSupply.ChannelCommand(2);
+        var channelInvalid = false;
+        try
+        {
+            It6322aPowerSupply.ChannelCommand(3);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            channelInvalid = true;
+        }
+
+        Program.Check("INS-15",
+            channel1 == "INST CH1" && channel2 == "INST CH2" && channelInvalid,
+            $"ch1={channel1} ch2={channel2} invalid={channelInvalid}");
+
         ecu.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 

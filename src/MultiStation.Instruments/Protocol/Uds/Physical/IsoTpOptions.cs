@@ -4,10 +4,10 @@ namespace MultiStation.Instruments.Protocol.Uds.Physical;
 public sealed record IsoTpOptions
 {
     /// <summary>诊断仪发送 ID（请求），默认 0x7E0。</summary>
-    public ushort TxId { get; init; } = 0x7E0;
+    public int TxId { get; init; } = 0x7E0;
 
     /// <summary>ECU 响应 ID，默认 0x7E8。</summary>
-    public ushort RxId { get; init; } = 0x7E8;
+    public int RxId { get; init; } = 0x7E8;
 
     public bool ExtendedId { get; init; }
 

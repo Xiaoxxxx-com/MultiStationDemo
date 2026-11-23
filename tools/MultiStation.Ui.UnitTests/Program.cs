@@ -7,6 +7,7 @@ internal static class Program
 {
     private static int _failures;
 
+    [STAThread]
     private static int Main(string[] args)
     {
         // 固定时间，避免依赖系统时钟
@@ -55,6 +56,10 @@ internal static class Program
 
         // 机种配置
         ModelTests.Run();
+        // 烧录报告规则
+        ReportTests.Run();
+        // NP12 工作簿与真实 UDS 执行器（仅内存模拟，不访问硬件）
+        Np12Tests.Run();
 
         // 真实仪器连通性检查需显式开启：dotnet run -- --hardware
         if (args.Contains("--hardware", StringComparer.OrdinalIgnoreCase))

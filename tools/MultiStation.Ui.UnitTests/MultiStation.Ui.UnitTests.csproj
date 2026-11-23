@@ -17,4 +17,8 @@
     <ProjectReference Include="..\..\src\MultiStation.Ui\MultiStation.Ui.Desktop\MultiStation.Ui.Desktop.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="11.0.0" />
+  </ItemGroup>
+
 </Project>

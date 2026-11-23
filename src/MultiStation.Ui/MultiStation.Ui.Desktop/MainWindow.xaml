@@ -74,6 +74,10 @@
                                VerticalAlignment="Center" />
                     <TextBlock x:Name="TxtModelName" Text="-" FontWeight="SemiBold" FontSize="14"
                                VerticalAlignment="Center" Margin="6,0,12,0" />
+                    <Button x:Name="BtnModelPrevious" Content="上一机种" Click="OnPreviousModel"
+                            Style="{StaticResource SmallGhostButton}" />
+                    <Button x:Name="BtnModelNext" Content="下一机种" Click="OnNextModel"
+                            Style="{StaticResource SmallGhostButton}" />
                     <Button x:Name="BtnModelSwitch" Content="机种切换" Click="OnSwitchModel"
                             Style="{StaticResource SmallGhostButton}" />
                 </StackPanel>

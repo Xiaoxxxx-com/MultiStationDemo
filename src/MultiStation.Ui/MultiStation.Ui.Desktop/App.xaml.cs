@@ -94,9 +94,10 @@ public partial class App : Application
                 }
             }
 
-            // 按上次选中的机种打开对应窗口套件：通用测试机种 → 测试主界面，ECU 烧录机种 → 独立烧录界面
+            // 每次完成登录后固定先进入 NP12；手动切换记录不影响下次登录首页
             var models = ModelStore.Load();
-            var selected = models.FirstOrDefault(m => m.Name == ModelStore.LoadSelected()) ?? models[0];
+            var selected = models.FirstOrDefault(m => m.Kind == ModelKind.Flash && m.Name == "NP12")
+                ?? models[0];
             if (isSmoke)
             {
                 // 冒烟自检固定使用通用测试机种，避免被上次选中的烧录机种影响
@@ -181,6 +182,7 @@ public partial class App : Application
     }
 
     private ModelProfileStore? _modelStore;
+    private bool _isModelSwitching;
 
     /// <summary>机种配置存储：机种切换窗口与窗口套件切换共用。</summary>
     internal ModelProfileStore ModelStore => _modelStore ??= new ModelProfileStore();
@@ -191,27 +193,83 @@ public partial class App : Application
     /// <summary>当前机种对应的窗口套件主窗口。</summary>
     internal Window? ModelShell { get; private set; }
 
+    /// <summary>按统一显示顺序选择相对机种，支持首尾循环；当前项缺失时回退 NP12。</summary>
+    public static ModelProfile SelectRelativeModel(
+        IReadOnlyList<ModelProfile> models,
+        string? currentModelName,
+        int delta)
+    {
+        var currentIndex = -1;
+        for (var index = 0; index < models.Count; index++)
+        {
+            if (models[index].Name == currentModelName)
+            {
+                currentIndex = index;
+                break;
+            }
+        }
+
+        if (currentIndex < 0)
+        {
+            return models.FirstOrDefault(model => model.Kind == ModelKind.Flash && model.Name == "NP12")
+                ?? models[0];
+        }
+
+        var targetIndex = (currentIndex + delta) % models.Count;
+        if (targetIndex < 0)
+        {
+            targetIndex += models.Count;
+        }
+
+        return models[targetIndex];
+    }
+
+    /// <summary>上一/下一机种共用入口，实际清理和窗口替换仍由 SwitchModelAsync 完成。</summary>
+    internal async Task SwitchModelRelativeAsync(int delta)
+    {
+        if (_isModelSwitching)
+        {
+            return;
+        }
+
+        var target = SelectRelativeModel(ModelStore.Load(), CurrentModel?.Name, delta);
+        await SwitchModelAsync(target);
+    }
+
     /// <summary>
     /// 切换机种：关闭当前机种窗口，再重新打开外壳并挂载新机种的 UI 视图。
     /// </summary>
     internal async Task SwitchModelAsync(ModelProfile model)
     {
-        ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        var previous = ModelShell;
-        ModelShell = null;
-
-        if (previous is MainWindow main)
+        if (_isModelSwitching)
         {
-            // 测试线需要优雅停机（停投料 → 停调度器 → 停工位 → 停设备）后再关闭
-            await main.ShutdownAsync();
-            main.Close();
-        }
-        else
-        {
-            previous?.Close();
+            return;
         }
 
-        ShowModelShell(model, persistSelection: true);
+        _isModelSwitching = true;
+        try
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var previous = ModelShell;
+            ModelShell = null;
+
+            if (previous is MainWindow main)
+            {
+                // 测试线需要优雅停机（停投料 → 停调度器 → 停工位 → 停设备）后再关闭
+                await main.ShutdownAsync();
+                main.Close();
+            }
+            else
+            {
+                previous?.Close();
+            }
+
+            ShowModelShell(model, persistSelection: true);
+        }
+        finally
+        {
+            _isModelSwitching = false;
+        }
     }
 
     /// <summary>按机种打开界面；ECU 烧录与通用机种共用同一套窗口，仅测试序列不同。</summary>

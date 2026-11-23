@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace MultiStation.Platform.Core.Production;
 
 /// <summary>机种类型：决定切换机种后加载哪一套测试序列。</summary>
@@ -25,6 +27,9 @@ public sealed record ModelProfile
 
     public int CanDeviceIndex { get; init; }
 
+    /// <summary>ZLG CAN 设备型号：400U（4 通道）或 200U（2 通道）；默认 200U。</summary>
+    public string CanDeviceModel { get; init; } = "200U";
+
     public int CanChannelIndex { get; init; }
 
     /// <summary>经典 CAN 或 CAN FD：classic / fd。</summary>
@@ -34,9 +39,46 @@ public sealed record ModelProfile
 
     public uint DataBaudRate { get; init; } = 2_000_000;
 
-    public ushort RequestId { get; init; } = 0x7E0;
+    public int RequestId { get; init; } = 0x7E0;
 
-    public ushort ResponseId { get; init; } = 0x7E8;
+    public int ResponseId { get; init; } = 0x7E8;
+
+    public int CcuRequestId { get; init; } = 0x7E4;
+
+    public int CcuResponseId { get; init; } = 0x7EC;
+
+    /// <summary>外部烧录序列（OOXML 工作簿）；为空时使用内置演示序列。</summary>
+    public string? FlashSequencePath { get; init; }
+
+    /// <summary>2E 写入数据配置，包含 [FactoryData] 节。</summary>
+    public string? FactoryDataPath { get; init; }
+
+    /// <summary>AutoProgramFlash 步骤调用的外部批处理。</summary>
+    public string? FlashBatchPath { get; init; }
+
+    /// <summary>烧录前上电所用的 IT6322A 串口名（如 COM3）；为空表示未配置。</summary>
+    public string? PowerSupplyPort { get; init; }
+
+    /// <summary>烧录前电源电压（V）：NP12 为 12V、NP13 为 24V；0 表示不上电。</summary>
+    public double PowerVoltage { get; init; }
+
+    /// <summary>烧录前电源限流（A）。</summary>
+    public double PowerCurrentLimit { get; init; } = 3;
+
+    /// <summary>IT6322A 串口参数：波特率,数据位,校验(N/E/O),停止位，默认 9600,8,N,1。</summary>
+    public string PowerSerialSettings { get; init; } = "9600,8,N,1";
+
+    /// <summary>IT6322A 输出通道：1=CH1、2=CH2；默认 CH1。</summary>
+    public int PowerChannel { get; init; } = 1;
+
+    /// <summary>烧录报告目录，支持占位符；为空表示不生成报告。</summary>
+    public string? ReportDirectory { get; init; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+        "E3Flash",
+        "Report");
+
+    /// <summary>报告文件名规则，支持 {Model}/{SN}/{CarrierID}/{ShellCode}/{Verdict}/{Date}/{Time}/{DateTime}。</summary>
+    public string ReportFileNamePattern { get; init; } = "{Model}_{SN}_{DateTime}.txt";
 
     public uint MemoryAddress { get; init; } = 0x0800_0000;
 

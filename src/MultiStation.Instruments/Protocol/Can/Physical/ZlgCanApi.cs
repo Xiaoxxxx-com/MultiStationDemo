@@ -11,6 +11,35 @@ public sealed class ZlgCanApi : IDisposable
     /// <summary>ZCAN_USBCANFD_400U 设备类型编号，与 zlgcan.h 保持一致。</summary>
     public const uint DeviceTypeUsbCanFd400U = 76;
 
+    /// <summary>ZCAN_USBCANFD_200U 设备类型编号，与 zlgcan.h 保持一致。</summary>
+    public const uint DeviceTypeUsbCanFd200U = 41;
+
+    /// <summary>按配置的型号解析 ZLG 设备类型；空值默认 200U。</summary>
+    public static uint ResolveDeviceType(string? deviceModel)
+    {
+        var value = deviceModel?.Trim();
+        if (string.IsNullOrEmpty(value)
+            || value.Equals("200U", StringComparison.OrdinalIgnoreCase))
+        {
+            return DeviceTypeUsbCanFd200U;
+        }
+
+        if (value.Equals("400U", StringComparison.OrdinalIgnoreCase))
+        {
+            return DeviceTypeUsbCanFd400U;
+        }
+
+        throw new FormatException($"未知的 ZLG CAN 设备型号：{deviceModel}（支持 200U / 400U）");
+    }
+
+    /// <summary>设备类型对应的显示名称，用于日志与异常提示。</summary>
+    public static string DescribeDevice(uint deviceType) => deviceType switch
+    {
+        DeviceTypeUsbCanFd200U => "USBCANFD-200U",
+        DeviceTypeUsbCanFd400U => "USBCANFD-400U",
+        _ => $"ZLG CAN（类型 {deviceType}）",
+    };
+
     private static readonly string[] CandidatePaths =
     [
         @"D:\ZCANPRO\zlgcan.dll",

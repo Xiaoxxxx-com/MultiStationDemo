@@ -15,7 +15,7 @@ public enum ZlgCanMode
 }
 
 /// <summary>
-/// ZLG USBCANFD-400U 四通道 CAN 仪器驱动：
+/// ZLG USBCANFD-400U / 200U CAN 仪器驱动：
 /// 打开设备、设置波特率、初始化并启动通道，按模式收发经典 CAN 或 CAN FD 报文。
 /// </summary>
 public sealed class ZlgCanFd400UInstrument(
@@ -24,7 +24,8 @@ public sealed class ZlgCanFd400UInstrument(
     int channelIndex = 0,
     ZlgCanMode mode = ZlgCanMode.CanFd,
     uint abitBaudRate = ZlgCanFd400UInstrument.DefaultAbitBaudRate,
-    uint dbitBaudRate = ZlgCanFd400UInstrument.DefaultDbitBaudRate) : ICanInstrument, IDisposable
+    uint dbitBaudRate = ZlgCanFd400UInstrument.DefaultDbitBaudRate,
+    uint deviceType = ZlgCanApi.DeviceTypeUsbCanFd400U) : ICanInstrument, IDisposable
 {
     public const uint DefaultAbitBaudRate = 500_000;
 
@@ -34,8 +35,10 @@ public sealed class ZlgCanFd400UInstrument(
     private readonly int _channelIndex = channelIndex;
     private readonly uint _abitBaudRate = abitBaudRate;
     private readonly uint _dbitBaudRate = dbitBaudRate;
+    private readonly uint _deviceType = deviceType;
     private readonly ZlgCanMode _mode = mode;
     private Channel<CanFrame> _frames = Channel.CreateUnbounded<CanFrame>();
+    private ZlgDeviceLease? _lease;
     private ZlgCanApi? _api;
     private uint _deviceHandle;
     private uint _channelHandle;
@@ -73,14 +76,9 @@ public sealed class ZlgCanFd400UInstrument(
             return;
         }
 
-        _api = ZlgCanApi.Load();
-        _deviceHandle = _api.OpenDevice(ZlgCanApi.DeviceTypeUsbCanFd400U, (uint)_deviceIndex, 0);
-        if (_deviceHandle == 0)
-        {
-            _api.Dispose();
-            _api = null;
-            throw new IOException($"打开 USBCANFD-400U 失败（设备序号 {_deviceIndex}），请确认设备已连接且未被其他软件占用");
-        }
+        _lease = ZlgDeviceLease.Acquire(_deviceType, _deviceIndex);
+        _api = _lease.Api;
+        _deviceHandle = _lease.Handle;
 
         if (_mode == ZlgCanMode.CanFd)
         {
@@ -356,13 +354,10 @@ public sealed class ZlgCanFd400UInstrument(
             _channelHandle = 0;
         }
 
-        if (_deviceHandle != 0)
-        {
-            _api.CloseDevice(_deviceHandle);
-            _deviceHandle = 0;
-        }
-
-        _api.Dispose();
+        // 同一设备的多个通道共享租约，最后一个通道释放时才真正关闭设备
+        _lease?.Dispose();
+        _lease = null;
+        _deviceHandle = 0;
         _api = null;
     }
 

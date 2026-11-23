@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
+using MultiStation.Instruments.Drivers.Itech;
 using MultiStation.Platform.Core.Production;
 
 namespace MultiStation.Ui.Desktop;
@@ -56,6 +57,8 @@ public partial class ModelSwitchWindow : Window
         TxtName.Text = model.Name;
         TxtFirmware.Text = model.FirmwarePath ?? string.Empty;
         TxtDeviceIndex.Text = model.CanDeviceIndex.ToString(CultureInfo.InvariantCulture);
+        CmbDeviceModel.SelectedIndex =
+            model.CanDeviceModel.Equals("200U", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         TxtChannelIndex.Text = model.CanChannelIndex.ToString(CultureInfo.InvariantCulture);
         CmbMode.SelectedIndex = model.IsCanFd ? 1 : 0;
         TxtBaud.Text = model.BaudRate.ToString(CultureInfo.InvariantCulture);
@@ -66,6 +69,19 @@ public partial class ModelSwitchWindow : Window
         TxtSecurityLevel.Text = model.SecurityLevel.ToString(CultureInfo.InvariantCulture);
         TxtFingerprint.Text = model.Fingerprint;
         ChkErase.IsChecked = model.EraseMemory;
+        TxtPowerPort.Text = model.PowerSupplyPort ?? string.Empty;
+        TxtPowerVoltage.Text = model.PowerVoltage > 0
+            ? model.PowerVoltage.ToString("0.###", CultureInfo.InvariantCulture)
+            : string.Empty;
+        TxtPowerCurrent.Text = model.PowerCurrentLimit.ToString("0.###", CultureInfo.InvariantCulture);
+        TxtPowerSerial.Text = string.IsNullOrWhiteSpace(model.PowerSerialSettings)
+            ? It6322aPowerSupply.DefaultSerialSettings
+            : model.PowerSerialSettings;
+        TxtReportDirectory.Text = model.ReportDirectory ?? string.Empty;
+        TxtReportFileName.Text = string.IsNullOrWhiteSpace(model.ReportFileNamePattern)
+            ? FlashReport.DefaultFileNamePattern
+            : model.ReportFileNamePattern;
+        CmbPowerChannel.SelectedIndex = model.PowerChannel == 2 ? 1 : 0;
         TxtRemark.Text = model.Remark ?? string.Empty;
         TxtError.Text = string.Empty;
         _loading = false;
@@ -130,6 +146,11 @@ public partial class ModelSwitchWindow : Window
         var responseId = ParseNumber(TxtResponseId.Text, "响应 ID", 0x1FFF_FFFF);
         var address = ParseNumber(TxtAddress.Text, "烧录地址", 0xFFFF_FFFF);
         var securityLevel = ParseNumber(TxtSecurityLevel.Text, "安全等级", 0xFF);
+        var serialSettings = string.IsNullOrWhiteSpace(TxtPowerSerial.Text)
+            ? It6322aPowerSupply.DefaultSerialSettings
+            : TxtPowerSerial.Text.Trim();
+        // 保存前先校验串口参数格式，避免烧录时才发现配置错误
+        It6322aPowerSupply.ParseSettings(serialSettings);
 
         return new ModelProfile
         {
@@ -137,12 +158,29 @@ public partial class ModelSwitchWindow : Window
             Name = name,
             FirmwarePath = string.IsNullOrWhiteSpace(TxtFirmware.Text) ? null : TxtFirmware.Text.Trim(),
             CanDeviceIndex = deviceIndex,
+            CanDeviceModel = CmbDeviceModel.SelectedIndex == 1 ? "200U" : "400U",
             CanChannelIndex = channelIndex,
             CanMode = CmbMode.SelectedIndex == 1 ? "fd" : "classic",
             BaudRate = baud,
             DataBaudRate = dataBaud,
-            RequestId = (ushort)requestId,
-            ResponseId = (ushort)responseId,
+            RequestId = (int)requestId,
+            ResponseId = (int)responseId,
+            CcuRequestId = existing.CcuRequestId,
+            CcuResponseId = existing.CcuResponseId,
+            FlashSequencePath = existing.FlashSequencePath,
+            FactoryDataPath = existing.FactoryDataPath,
+            FlashBatchPath = existing.FlashBatchPath,
+            PowerSupplyPort = string.IsNullOrWhiteSpace(TxtPowerPort.Text) ? null : TxtPowerPort.Text.Trim(),
+            PowerVoltage = ParseDouble(TxtPowerVoltage.Text, "电源电压", 0, 30),
+            PowerCurrentLimit = ParseDouble(TxtPowerCurrent.Text, "电源限流", 0.1, 3, empty: 3),
+            PowerSerialSettings = serialSettings,
+            PowerChannel = CmbPowerChannel.SelectedIndex == 1 ? 2 : 1,
+            ReportDirectory = string.IsNullOrWhiteSpace(TxtReportDirectory.Text)
+                ? null
+                : TxtReportDirectory.Text.Trim(),
+            ReportFileNamePattern = string.IsNullOrWhiteSpace(TxtReportFileName.Text)
+                ? FlashReport.DefaultFileNamePattern
+                : TxtReportFileName.Text.Trim(),
             MemoryAddress = address,
             SecurityLevel = (byte)securityLevel,
             Fingerprint = TxtFingerprint.Text.Trim(),
@@ -174,6 +212,23 @@ public partial class ModelSwitchWindow : Window
         if (parsed > max)
         {
             throw new FormatException($"{field}超出允许范围（最大 {max}）");
+        }
+
+        return parsed;
+    }
+
+    private static double ParseDouble(string text, string field, double min, double max, double empty = 0)
+    {
+        var value = text.Trim();
+        if (value.Length == 0)
+        {
+            return empty;
+        }
+
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            || parsed < min || parsed > max)
+        {
+            throw new FormatException($"{field}格式不正确（范围 {min}～{max}）");
         }
 
         return parsed;
@@ -242,6 +297,15 @@ public partial class ModelSwitchWindow : Window
         if (dialog.ShowDialog(this) == true)
         {
             TxtFirmware.Text = dialog.FileName;
+        }
+    }
+
+    private void OnBrowseReportDirectory(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { Title = "选择烧录报告目录" };
+        if (dialog.ShowDialog(this) == true)
+        {
+            TxtReportDirectory.Text = dialog.FolderName;
         }
     }
 

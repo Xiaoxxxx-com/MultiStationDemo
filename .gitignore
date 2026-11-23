@@ -6,3 +6,6 @@ obj/
 Config/
 logs/
 *.log
+publish/
+Flash/
+.trae/
