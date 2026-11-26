@@ -5,12 +5,16 @@ using System.Text;
 namespace MultiStation.Instruments.Drivers.Itech;
 
 /// <summary>
-/// ITECH IT6322A 三路可编程直流电源：通过 RS232 串口发送 SCPI 命令，
-/// 在烧录前给被测件上电（CH1），并可关闭输出。
+/// ITECH IT6322B / IT6332B 三路可编程直流电源：通过 RS232 串口发送 SCPI 命令，
+/// 在烧录前给被测件上电（默认 CH1），并可关闭输出、回读电压/电流。
+/// 命令以 CR+LF 结束，通道用 INST 1/2/3 切换。
 /// </summary>
 public sealed class It6322aPowerSupply : IDisposable
 {
     public const string DefaultSerialSettings = "9600,8,N,1";
+
+    /// <summary>新手册要求的命令结束符：CR+LF（0x0D,0x0A）。</summary>
+    public const string Terminator = "\r\n";
 
     private readonly string _portName;
     private readonly SerialSettings _settings;
@@ -87,6 +91,7 @@ public sealed class It6322aPowerSupply : IDisposable
 
         var port = new SerialPort(_portName, _settings.BaudRate, _settings.Parity, _settings.DataBits, _settings.StopBits)
         {
+            // 读取按 LF 分行（同时兼容 CR+LF 响应），下发命令统一使用手册要求的 CR+LF
             NewLine = "\n",
             Encoding = Encoding.ASCII,
             ReadTimeout = 1500,
@@ -103,7 +108,8 @@ public sealed class It6322aPowerSupply : IDisposable
         if (!identity.Contains("IT", StringComparison.OrdinalIgnoreCase))
         {
             Dispose();
-            throw new IOException($"串口 {_portName} 未识别到 IT6322A（*IDN?={identity}）");
+            throw new IOException(
+                $"串口 {_portName} 未识别到 IT6322B/IT6332B 电源（*IDN?={identity}）");
         }
     }
 
@@ -118,7 +124,7 @@ public sealed class It6322aPowerSupply : IDisposable
         var state = Query("OUTP?");
         if (!IsOn(state))
         {
-            throw new IOException($"IT6322A 输出未打开（CH{channel} OUTP?={state}）");
+            throw new IOException($"电源输出未打开（CH{channel} OUTP?={state}）");
         }
     }
 
@@ -139,10 +145,21 @@ public sealed class It6322aPowerSupply : IDisposable
             : null;
     }
 
-    /// <summary>通道选择命令；IT6322A 的可编程输出为 CH1/CH2。</summary>
-    public static string ChannelCommand(int channel) => channel is 1 or 2
-        ? $"INST CH{channel}"
-        : throw new ArgumentOutOfRangeException(nameof(channel), "IT6322A 输出通道应为 1 或 2");
+    /// <summary>读取指定通道当前电流（A），用于上电后回读产品电流；无法解析时返回 null。</summary>
+    public double? ReadCurrent(int channel = 1)
+    {
+        Send(ChannelCommand(channel));
+        var text = Query("MEAS:CURR?");
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var current)
+            ? current
+            : null;
+    }
+
+    /// <summary>通道选择命令：按新手册使用 INST 1 / INST 2 / INST 3。</summary>
+    public static string ChannelCommand(int channel) => channel is 1 or 2 or 3
+        ? string.Create(CultureInfo.InvariantCulture, $"INST {channel}")
+        : throw new ArgumentOutOfRangeException(
+            nameof(channel), "IT6322B/IT6332B 输出通道应为 1、2 或 3");
 
     public void Dispose()
     {
@@ -171,14 +188,14 @@ public sealed class It6322aPowerSupply : IDisposable
     private void Send(string command)
     {
         EnsureOpen();
-        _port!.Write(command + "\n");
+        _port!.Write(command + Terminator);
     }
 
     private string Query(string command)
     {
         EnsureOpen();
         _port!.DiscardInBuffer();
-        _port.Write(command + "\n");
+        _port.Write(command + Terminator);
 
         // 部分 RS232 固件会回显命令，跳过回显行后再取响应
         for (var attempt = 0; attempt < 5; attempt++)
@@ -192,7 +209,7 @@ public sealed class It6322aPowerSupply : IDisposable
             return line;
         }
 
-        throw new IOException($"IT6322A 未响应命令：{command}");
+        throw new IOException($"电源未响应命令：{command}");
     }
 
     private static bool IsOn(string state) =>
@@ -202,10 +219,10 @@ public sealed class It6322aPowerSupply : IDisposable
     {
         if (_port is null || !_port.IsOpen)
         {
-            throw new InvalidOperationException("IT6322A 串口尚未连接");
+            throw new InvalidOperationException("电源串口尚未连接");
         }
     }
 }
 
-/// <summary>IT6322A 串口通讯参数。</summary>
+/// <summary>IT6322B/IT6332B 串口通讯参数。</summary>
 public readonly record struct SerialSettings(int BaudRate, int DataBits, Parity Parity, StopBits StopBits);

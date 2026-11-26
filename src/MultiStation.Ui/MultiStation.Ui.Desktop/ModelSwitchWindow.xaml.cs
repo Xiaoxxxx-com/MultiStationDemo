@@ -82,6 +82,11 @@ public partial class ModelSwitchWindow : Window
             ? FlashReport.DefaultFileNamePattern
             : model.ReportFileNamePattern;
         CmbPowerChannel.SelectedIndex = model.PowerChannel == 2 ? 1 : 0;
+        TxtBatSuccessCodes.Text = string.IsNullOrWhiteSpace(model.BatSuccessExitCodes)
+            ? "0"
+            : model.BatSuccessExitCodes;
+        TxtUdsInterval.Text = model.UdsRequestIntervalMs.ToString(CultureInfo.InvariantCulture);
+        TxtUdsRetry.Text = model.UdsRetryCount.ToString(CultureInfo.InvariantCulture);
         TxtRemark.Text = model.Remark ?? string.Empty;
         TxtError.Text = string.Empty;
         _loading = false;
@@ -144,6 +149,8 @@ public partial class ModelSwitchWindow : Window
         var dataBaud = ParseNumber(TxtDataBaud.Text, "数据波特率", 8_000_000);
         var requestId = ParseNumber(TxtRequestId.Text, "请求 ID", 0x1FFF_FFFF);
         var responseId = ParseNumber(TxtResponseId.Text, "响应 ID", 0x1FFF_FFFF);
+        var udsInterval = ParseNumber(TxtUdsInterval.Text, "诊断间隔", 60_000);
+        var udsRetry = ParseNumber(TxtUdsRetry.Text, "诊断重试次数", 100);
         var address = ParseNumber(TxtAddress.Text, "烧录地址", 0xFFFF_FFFF);
         var securityLevel = ParseNumber(TxtSecurityLevel.Text, "安全等级", 0xFF);
         var serialSettings = string.IsNullOrWhiteSpace(TxtPowerSerial.Text)
@@ -165,6 +172,8 @@ public partial class ModelSwitchWindow : Window
             DataBaudRate = dataBaud,
             RequestId = (int)requestId,
             ResponseId = (int)responseId,
+            UdsRequestIntervalMs = (int)udsInterval,
+            UdsRetryCount = (int)udsRetry,
             CcuRequestId = existing.CcuRequestId,
             CcuResponseId = existing.CcuResponseId,
             FlashSequencePath = existing.FlashSequencePath,
@@ -175,6 +184,9 @@ public partial class ModelSwitchWindow : Window
             PowerCurrentLimit = ParseDouble(TxtPowerCurrent.Text, "电源限流", 0.1, 3, empty: 3),
             PowerSerialSettings = serialSettings,
             PowerChannel = CmbPowerChannel.SelectedIndex == 1 ? 2 : 1,
+            BatSuccessExitCodes = string.IsNullOrWhiteSpace(TxtBatSuccessCodes.Text)
+                ? "0"
+                : TxtBatSuccessCodes.Text.Trim(),
             ReportDirectory = string.IsNullOrWhiteSpace(TxtReportDirectory.Text)
                 ? null
                 : TxtReportDirectory.Text.Trim(),

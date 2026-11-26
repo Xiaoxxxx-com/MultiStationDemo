@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using MultiStation.Instruments.Drivers.Itech;
+using MultiStation.Instruments.Logging;
 using MultiStation.Platform.Core.Production;
 using MultiStation.Platform.Security;
 
@@ -104,7 +105,16 @@ public partial class FlashModelView : UserControl, IModelView
             PnlControlCard.Visibility = Visibility.Visible;
         }
 
-        _controller = new SingleStationTestController(sequence.Rows, _udsExecutor);
+        _controller = new SingleStationTestController(sequence.Rows, _udsExecutor, model.BatSuccessExitCodes);
+        var runOptions = TestRunOptions.Load();
+        ChkStopOnNg.IsChecked = runOptions.StopOnNg;
+        ChkLogRawFrames.IsChecked = runOptions.LogRawFrames;
+        _controller.StopOnNg = runOptions.StopOnNg;
+        RawFrameLogger.Enabled = runOptions.LogRawFrames;
+        ChkStopOnNg.Checked += OnStopOnNgChanged;
+        ChkStopOnNg.Unchecked += OnStopOnNgChanged;
+        ChkLogRawFrames.Checked += OnLogRawFramesChanged;
+        ChkLogRawFrames.Unchecked += OnLogRawFramesChanged;
         StepGrid.ItemsSource = _controller.Steps;
         FlashLogList.ItemsSource = _controller.Logs;
         _controller.Changed += UpdateControls;
@@ -131,6 +141,12 @@ public partial class FlashModelView : UserControl, IModelView
             button.HorizontalAlignment = HorizontalAlignment.Stretch;
             button.Margin = new Thickness(0, 0, 0, 8);
         }
+
+        // 竖向排列时勾选框改为左对齐，避免被拉伸
+        ChkStopOnNg.HorizontalAlignment = HorizontalAlignment.Left;
+        ChkStopOnNg.Margin = new Thickness(0, 2, 0, 0);
+        ChkLogRawFrames.HorizontalAlignment = HorizontalAlignment.Left;
+        ChkLogRawFrames.Margin = new Thickness(0, 6, 0, 0);
 
         Grid.SetRow(TxtFlashStatus, 2);
         TxtFlashStatus.HorizontalAlignment = HorizontalAlignment.Left;
@@ -280,6 +296,22 @@ public partial class FlashModelView : UserControl, IModelView
         }
 
         _controller.NextStep();
+    }
+
+    /// <summary>切换 NG 后是否停止：运行中也可修改，立即对后续判定生效。</summary>
+    private void OnStopOnNgChanged(object sender, RoutedEventArgs e)
+    {
+        var stopOnNg = ChkStopOnNg.IsChecked == true;
+        _controller.StopOnNg = stopOnNg;
+        (TestRunOptions.Load() with { StopOnNg = stopOnNg }).Save();
+    }
+
+    /// <summary>切换是否记录原始 CAN 报文：文件位于 logs\raw\raw-yyyyMMdd.log。</summary>
+    private void OnLogRawFramesChanged(object sender, RoutedEventArgs e)
+    {
+        var enabled = ChkLogRawFrames.IsChecked == true;
+        RawFrameLogger.Enabled = enabled;
+        (TestRunOptions.Load() with { LogRawFrames = enabled }).Save();
     }
 
     /// <summary>停止或异常结束时兜底断电；正常结束时序列末步也会执行断电指令。</summary>

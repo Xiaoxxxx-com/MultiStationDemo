@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using MultiStation.Instruments.Logging;
 using MultiStation.Instruments.Protocol.Can.Algorithm;
 using MultiStation.Instruments.Protocol.Can.Physical;
 
@@ -25,7 +26,8 @@ public sealed class ZlgCanFd400UInstrument(
     ZlgCanMode mode = ZlgCanMode.CanFd,
     uint abitBaudRate = ZlgCanFd400UInstrument.DefaultAbitBaudRate,
     uint dbitBaudRate = ZlgCanFd400UInstrument.DefaultDbitBaudRate,
-    uint deviceType = ZlgCanApi.DeviceTypeUsbCanFd400U) : ICanInstrument, IDisposable
+    uint deviceType = ZlgCanApi.DeviceTypeUsbCanFd400U,
+    bool terminalResistor = false) : ICanInstrument, IDisposable
 {
     public const uint DefaultAbitBaudRate = 500_000;
 
@@ -37,6 +39,7 @@ public sealed class ZlgCanFd400UInstrument(
     private readonly uint _dbitBaudRate = dbitBaudRate;
     private readonly uint _deviceType = deviceType;
     private readonly ZlgCanMode _mode = mode;
+    private readonly bool _terminalResistor = terminalResistor;
     private Channel<CanFrame> _frames = Channel.CreateUnbounded<CanFrame>();
     private ZlgDeviceLease? _lease;
     private ZlgCanApi? _api;
@@ -76,12 +79,25 @@ public sealed class ZlgCanFd400UInstrument(
             return;
         }
 
-        _lease = ZlgDeviceLease.Acquire(_deviceType, _deviceIndex);
+        _lease ??= ZlgDeviceLease.Acquire(_deviceType, _deviceIndex);
         _api = _lease.Api;
         _deviceHandle = _lease.Handle;
 
+        // 内置 120Ω 终端电阻，对应 ZCANPRO 的「终端电阻：使能」
+        var terminalEnabled = _terminalResistor
+            && _api.SetValue(
+                _deviceHandle,
+                string.Create(CultureInfo.InvariantCulture, $"{_channelIndex}/terminal_resistor"),
+                "1") != 0;
+
+        var isoFd = false;
         if (_mode == ZlgCanMode.CanFd)
         {
+            // 显式使用 ISO CAN FD（与 ZCANPRO 默认一致）；部分驱动版本默认非 ISO，ECU 会丢弃报文
+            isoFd = _api.SetValue(
+                _deviceHandle,
+                string.Create(CultureInfo.InvariantCulture, $"{_channelIndex}/canfd_standard"),
+                "1") != 0;
             SetBaudRateOrThrow("canfd_abit_baud_rate", _abitBaudRate);
             SetBaudRateOrThrow("canfd_dbit_baud_rate", _dbitBaudRate);
             InitCanFdChannel();
@@ -109,6 +125,12 @@ public sealed class ZlgCanFd400UInstrument(
         _cts = new CancellationTokenSource();
         _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token), CancellationToken.None);
         SetState(InstrumentState.Connected);
+        RawFrameLogger.Mark(
+            $"CAN 打开 DEV{_deviceIndex} CH{_channelIndex} " +
+            $"{(_mode == ZlgCanMode.CanFd ? (isoFd ? "FD(ISO)" : "FD(非ISO)") : "CLASSIC")} " +
+            $"{_abitBaudRate}/{_dbitBaudRate}" +
+            (_mode == ZlgCanMode.CanFd && _dbitBaudRate > _abitBaudRate ? " BRS" : string.Empty) +
+            (terminalEnabled ? " TERM" : string.Empty));
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
@@ -116,6 +138,17 @@ public sealed class ZlgCanFd400UInstrument(
     public void Dispose() => DisconnectAsync().GetAwaiter().GetResult();
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    {
+        await StopChannelAsync(keepDevice: false).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 只关闭本通道、保留设备句柄：下次用到时按需重新初始化，
+    /// 避免整台设备被反复关闭再打开导致发送失败。
+    /// </summary>
+    public Task CloseChannelAsync() => StopChannelAsync(keepDevice: true);
+
+    private async Task StopChannelAsync(bool keepDevice)
     {
         var cts = _cts;
         _cts = null;
@@ -135,9 +168,26 @@ public sealed class ZlgCanFd400UInstrument(
         }
 
         cts?.Dispose();
-        ReleaseDevice();
-        _frames.Writer.TryComplete();
+
+        if (_channelHandle != 0)
+        {
+            _api?.ResetCan(_channelHandle);
+            _channelHandle = 0;
+        }
+
+        if (!keepDevice)
+        {
+            _lease?.Dispose();
+            _lease = null;
+            _api = null;
+            _deviceHandle = 0;
+            _frames.Writer.TryComplete();
+        }
+
         SetState(InstrumentState.Disconnected);
+        RawFrameLogger.Mark(keepDevice
+            ? $"CAN 关闭 DEV{_deviceIndex} CH{_channelIndex}（保留设备）"
+            : $"CAN 关闭 DEV{_deviceIndex} CH{_channelIndex}");
     }
 
     public Task SendAsync(CanFrame frame, CancellationToken cancellationToken = default)
@@ -163,6 +213,9 @@ public sealed class ZlgCanFd400UInstrument(
 
     private int MaxDataLength => _mode == ZlgCanMode.CanFd ? 64 : 8;
 
+    /// <summary>CAN FD 帧的 BRS 标志：数据段切换到数据波特率。</summary>
+    private const byte CanFdBrsFlag = 0x01;
+
     private Task SendClassicAsync(CanFrame frame)
     {
         var data = new ZlgTransmitData
@@ -180,10 +233,11 @@ public sealed class ZlgCanFd400UInstrument(
         var sent = _api!.Transmit(_channelHandle, ref data, 1);
         if (sent == 0)
         {
-            throw new IOException($"CAN 报文发送失败（ID=0x{frame.Id:X}）");
+            throw new IOException($"CAN 报文发送失败（CH{_channelIndex} ID=0x{frame.Id:X}）");
         }
 
         SentCount++;
+        RawFrameLogger.Write(false, _deviceIndex, _channelIndex, frame, canFd: false);
         return Task.CompletedTask;
     }
 
@@ -194,7 +248,9 @@ public sealed class ZlgCanFd400UInstrument(
             Frame = new ZlgCanFdFrame
             {
                 CanId = CanFrameCodec.Encode(frame),
-                Len = (byte)frame.Data.Length,
+                Len = ToFdLengthCode(frame.Data.Length),
+                // 数据段波特率高于仲裁段时启用 BRS，FD 帧才会真正切换到数据波特率
+                Flags = _dbitBaudRate > _abitBaudRate ? CanFdBrsFlag : (byte)0,
                 Data = new byte[64],
             },
             TransmitType = 0,
@@ -204,10 +260,11 @@ public sealed class ZlgCanFd400UInstrument(
         var sent = _api!.TransmitFd(_channelHandle, ref data, 1);
         if (sent == 0)
         {
-            throw new IOException($"CAN FD 报文发送失败（ID=0x{frame.Id:X}）");
+            throw new IOException($"CAN FD 报文发送失败（CH{_channelIndex} ID=0x{frame.Id:X}）");
         }
 
         SentCount++;
+        RawFrameLogger.Write(false, _deviceIndex, _channelIndex, frame, canFd: true);
         return Task.CompletedTask;
     }
 
@@ -284,8 +341,10 @@ public sealed class ZlgCanFd400UInstrument(
                 for (var i = 0u; i < count; i++)
                 {
                     var frame = buffer[i].Frame;
-                    var length = Math.Min(frame.Len, (byte)64);
-                    _frames.Writer.TryWrite(CanFrameCodec.Decode(frame.CanId, frame.Data.AsSpan(0, length)));
+                    var length = Math.Min(DecodeFdLength(frame.Len), (byte)64);
+                    var decoded = CanFrameCodec.Decode(frame.CanId, frame.Data.AsSpan(0, length));
+                    RawFrameLogger.Write(true, _deviceIndex, _channelIndex, decoded, canFd: true);
+                    _frames.Writer.TryWrite(decoded);
                 }
             }
         }
@@ -313,7 +372,9 @@ public sealed class ZlgCanFd400UInstrument(
                 {
                     var frame = buffer[i].Frame;
                     var length = Math.Min(frame.CanDlc, (byte)8);
-                    _frames.Writer.TryWrite(CanFrameCodec.Decode(frame.CanId, frame.Data.AsSpan(0, length)));
+                    var decoded = CanFrameCodec.Decode(frame.CanId, frame.Data.AsSpan(0, length));
+                    RawFrameLogger.Write(true, _deviceIndex, _channelIndex, decoded, canFd: false);
+                    _frames.Writer.TryWrite(decoded);
                 }
             }
         }
@@ -388,6 +449,32 @@ public sealed class ZlgCanFd400UInstrument(
                 ? index
                 : 0;
     }
+
+    /// <summary>CAN FD 数据字节数转 ZLG 的 DLC 编码（len 字段是 DLC，不是字节数）。</summary>
+    private static byte ToFdLengthCode(int length) => length switch
+    {
+        <= 8 => (byte)length,
+        <= 12 => 9,
+        <= 16 => 10,
+        <= 20 => 11,
+        <= 24 => 12,
+        <= 32 => 13,
+        <= 48 => 14,
+        _ => 15,
+    };
+
+    /// <summary>ZLG 的 DLC 编码还原为实际数据字节数。</summary>
+    private static int DecodeFdLength(byte lengthCode) => lengthCode switch
+    {
+        <= 8 => lengthCode,
+        9 => 12,
+        10 => 16,
+        11 => 20,
+        12 => 24,
+        13 => 32,
+        14 => 48,
+        _ => 64,
+    };
 
     private static ZlgCanMode ParseMode(string address)
     {

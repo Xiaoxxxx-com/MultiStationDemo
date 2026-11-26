@@ -47,11 +47,19 @@ public sealed class ZlgCanApi : IDisposable
         @"C:\Program Files\ZCANPRO\zlgcan.dll",
     ];
 
+    /// <summary>ZCANPRO 安装目录自带的驱动库；程序目录那份与当前驱动不匹配时用它回退。</summary>
+    public static IEnumerable<string> AlternatePaths() =>
+        CandidatePaths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
+
     private readonly IntPtr _module;
 
-    private ZlgCanApi(IntPtr module)
+    /// <summary>实际加载的 zlgcan.dll 完整路径，便于现场排查版本不一致。</summary>
+    public string LoadedPath { get; }
+
+    private ZlgCanApi(IntPtr module, string loadedPath)
     {
         _module = module;
+        LoadedPath = loadedPath;
         OpenDevice = Load<OpenDeviceFn>("ZCAN_OpenDevice");
         CloseDevice = Load<CloseDeviceFn>("ZCAN_CloseDevice");
         InitCan = Load<InitCanFn>("ZCAN_InitCAN");
@@ -119,7 +127,7 @@ public sealed class ZlgCanApi : IDisposable
                 "未找到 zlgcan.dll，请安装 ZLG CAN 驱动（ZCANPRO）或通过环境变量 ZLGCAN_DLL 指定完整路径");
         }
 
-        return new ZlgCanApi(NativeLibrary.Load(path));
+        return new ZlgCanApi(NativeLibrary.Load(path), path);
     }
 
     public void Dispose() => NativeLibrary.Free(_module);

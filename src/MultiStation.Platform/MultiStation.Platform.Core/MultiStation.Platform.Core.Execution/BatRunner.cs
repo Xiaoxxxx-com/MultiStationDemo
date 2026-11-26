@@ -11,13 +11,16 @@ public sealed record BatResult(
     string StandardError,
     string Message)
 {
-    /// <summary>判定口径：正常启动、未超时且退出码为 0。</summary>
-    public bool Passed => Started && !TimedOut && ExitCode == 0;
+    /// <summary>本次退出码是否被配置接受；未显式设置时仅接受 0。</summary>
+    public bool Success { get; init; }
+
+    /// <summary>判定口径：正常启动、未超时且退出码在成功列表内。</summary>
+    public bool Passed => Started && !TimedOut && Success;
 }
 
 /// <summary>
 /// 测试序列中的外部批处理执行器。
-/// 仅接受 .bat / .cmd：退出码 0 判通过，非 0 判失败，超时强制终止并判失败。
+/// 退出码在成功列表内判通过（默认仅 0），否则判失败；超时强制终止并判失败。
 /// </summary>
 public static class BatRunner
 {
@@ -30,7 +33,8 @@ public static class BatRunner
         string? arguments,
         string? workingDirectory,
         int timeoutMs,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? successExitCodes = null)
     {
         if (string.IsNullOrWhiteSpace(file))
         {
@@ -51,6 +55,7 @@ public static class BatRunner
 
         var effectiveTimeout = timeoutMs > 0 ? timeoutMs : DefaultTimeoutMs;
         var workDir = ResolveWorkDir(workingDirectory, path);
+        var acceptedCodes = ParseSuccessCodes(successExitCodes);
 
         // cmd /d /c ""脚本路径" 参数"：外层引号保证路径含空格时也能正确解析
         var info = new ProcessStartInfo
@@ -116,7 +121,37 @@ public static class BatRunner
             false,
             standardOutput,
             standardError,
-            process.ExitCode == 0 ? "执行成功" : $"退出码 {process.ExitCode}");
+            process.ExitCode == 0
+                ? "执行成功"
+                : acceptedCodes.Contains(process.ExitCode)
+                    ? $"退出码 {process.ExitCode}（按成功处理）"
+                    : $"退出码 {process.ExitCode}")
+        {
+            Success = acceptedCodes.Contains(process.ExitCode),
+        };
+    }
+
+    /// <summary>解析成功退出码列表；为空或非法时回退为仅 0。</summary>
+    private static HashSet<int> ParseSuccessCodes(string? text)
+    {
+        var codes = new HashSet<int>();
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            foreach (var part in text.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(part, out var code))
+                {
+                    codes.Add(code);
+                }
+            }
+        }
+
+        if (codes.Count == 0)
+        {
+            codes.Add(0);
+        }
+
+        return codes;
     }
 
     private static BatResult Fail(string message) => new(false, -1, false, string.Empty, string.Empty, message);

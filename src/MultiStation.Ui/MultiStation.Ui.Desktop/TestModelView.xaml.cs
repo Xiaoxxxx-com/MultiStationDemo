@@ -12,6 +12,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using MultiStation.Instruments.Logging;
 using MultiStation.Platform.Core.Logging;
 using MultiStation.Platform.Security;
 using MultiStation.Platform.Simulation;
@@ -109,6 +110,15 @@ public partial class TestModelView : UserControl, IModelView
         RefreshBasicInfoState();
 
         _testController = new SingleStationTestController(TestSequenceData.Rows);
+        var runOptions = TestRunOptions.Load();
+        ChkStopOnNg.IsChecked = runOptions.StopOnNg;
+        ChkLogRawFrames.IsChecked = runOptions.LogRawFrames;
+        _testController.StopOnNg = runOptions.StopOnNg;
+        RawFrameLogger.Enabled = runOptions.LogRawFrames;
+        ChkStopOnNg.Checked += OnStopOnNgChanged;
+        ChkStopOnNg.Unchecked += OnStopOnNgChanged;
+        ChkLogRawFrames.Checked += OnLogRawFramesChanged;
+        ChkLogRawFrames.Unchecked += OnLogRawFramesChanged;
         StepGrid.ItemsSource = _testController.Steps;
         LoadFieldConfig();
         ParamGrid.ItemsSource = _testController.Parameters;
@@ -185,6 +195,22 @@ public partial class TestModelView : UserControl, IModelView
         }
 
         _testController.NextStep();
+    }
+
+    /// <summary>切换 NG 后是否停止：运行中也可修改，立即对后续判定生效。</summary>
+    private void OnStopOnNgChanged(object sender, RoutedEventArgs e)
+    {
+        var stopOnNg = ChkStopOnNg.IsChecked == true;
+        _testController.StopOnNg = stopOnNg;
+        (TestRunOptions.Load() with { StopOnNg = stopOnNg }).Save();
+    }
+
+    /// <summary>切换是否记录原始 CAN 报文：文件位于 logs\raw\raw-yyyyMMdd.log。</summary>
+    private void OnLogRawFramesChanged(object sender, RoutedEventArgs e)
+    {
+        var enabled = ChkLogRawFrames.IsChecked == true;
+        RawFrameLogger.Enabled = enabled;
+        (TestRunOptions.Load() with { LogRawFrames = enabled }).Save();
     }
 
     /// <summary>人工确认：每次进入测试前必须由现场人员确认，未确认不得开始。</summary>

@@ -67,7 +67,7 @@ public sealed class TestStepVm(TestSequenceRow row) : INotifyPropertyChanged
     /// <summary>标题 / TestProject 行只做分组，不参与实际测试判定。</summary>
     public bool IsGroup => Kind is "标题" or "TestProject";
 
-    /// <summary>Bat 步骤：调用外部批处理，退出码 0 判 PASS。</summary>
+    /// <summary>Bat 步骤：调用外部批处理，成功退出码取脚本「评判标准(等值)」或机种配置。</summary>
     public bool IsBat => string.Equals(Kind, "Bat", StringComparison.OrdinalIgnoreCase);
 
     public string Measured
@@ -248,8 +248,8 @@ public sealed class SingleStationTestController : IDisposable
     private readonly DispatcherTimer _timer;
     private readonly Dispatcher _dispatcher;
     private static readonly char[] _newLineChars = ['\r', '\n'];
-    private readonly Random _random = new();
     private readonly IReadOnlyList<TestSequenceRow> _rows;
+    private readonly string? _batSuccessExitCodes;
     private readonly IUdsStepExecutor? _udsExecutor;
     private int _current = -1;
     private bool _running;
@@ -268,11 +268,13 @@ public sealed class SingleStationTestController : IDisposable
 
     public SingleStationTestController(
         IReadOnlyList<TestSequenceRow> rows,
-        IUdsStepExecutor? udsExecutor = null)
+        IUdsStepExecutor? udsExecutor = null,
+        string? batSuccessExitCodes = null)
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
         _rows = rows;
         _udsExecutor = udsExecutor;
+        _batSuccessExitCodes = batSuccessExitCodes;
         Steps = new ObservableCollection<TestStepVm>(rows.Select(row => new TestStepVm(row)));
 
         Parameters =
@@ -317,6 +319,12 @@ public sealed class SingleStationTestController : IDisposable
 
     /// <summary>执行器释放完成前禁止下一件开始，避免与 AutoLoader 争用 CAN。</summary>
     public bool IsCleaningUp => !_cleanupTask.IsCompleted;
+
+    /// <summary>
+    /// NG 后是否停止：true（默认）时 PreSeq/MainSeq 判 NG 立即转 PostSeq 收尾；
+    /// false 时记录 NG 但继续执行后续步骤，最终结果仍判 NG。
+    /// </summary>
+    public bool StopOnNg { get; set; } = true;
 
     public int PassCount { get; private set; }
 
@@ -511,24 +519,15 @@ public sealed class SingleStationTestController : IDisposable
             return;
         }
 
-        // Bat / 真实 UDS 步骤的结果由后台回调写入，这里不参与随机模拟
-        if (step.IsBat || ShouldExecuteUds(step))
+        // Bat / 真实硬件步骤的结果由后台回调写入
+        if (step.IsBat || ShouldExecuteHardware(step))
         {
             return;
         }
 
-        var passed = _random.NextDouble() > 0.12;
-        var duration = 480 + _random.NextDouble() * 420;
-        var measured = BuildMeasured(step, passed);
-
-        step.Complete(passed, measured, duration);
-        AddLog($"步骤 {index + 1} {step.Project} {(passed ? "PASS" : "NG")} · {measured} · {duration:F0} ms");
-        UpdateParameter(step, passed);
-
-        if (!passed)
-        {
-            _hasNg = true;
-        }
+        // 没有可执行设备指令的步骤不参与判定，明确标记为跳过，不再生成模拟结果
+        step.MarkSkipped();
+        AddLog($"步骤 {index + 1} {step.Project} 已跳过（无设备指令）");
     }
 
     private void MarkStepEntered(int index)
@@ -548,25 +547,34 @@ public sealed class SingleStationTestController : IDisposable
         {
             BeginBat(index, step);
         }
-        else if (ShouldExecuteUds(step))
+        else if (ShouldExecuteHardware(step))
         {
             BeginUds(index, step);
         }
     }
 
-    private bool ShouldExecuteUds(TestStepVm step) =>
+    /// <summary>
+    /// 需要真实执行器执行的硬件步骤：UDS 诊断（PDU= 或 SID= 写法）、
+    /// CAN 初始化、IT6322B/IT6332B 电源上电/回读/断电。
+    /// 未接硬件时必须真实执行并判 NG。
+    /// </summary>
+    private bool ShouldExecuteHardware(TestStepVm step) =>
         _udsExecutor is not null
-        && step.Command.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            .Any(segment => segment.Trim().StartsWith("PDU=", StringComparison.OrdinalIgnoreCase))
-        && step.Command.Contains("COM=UDS", StringComparison.OrdinalIgnoreCase);
+        && (step.Command.StartsWith("COM=UDS", StringComparison.OrdinalIgnoreCase)
+            || step.Command.StartsWith("COM=CAN", StringComparison.OrdinalIgnoreCase)
+            || step.Command.StartsWith("COM=IT6322A", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>启动 Bat 步骤：后台执行，完成后回到界面线程写结果。</summary>
     private void BeginBat(int index, TestStepVm step)
     {
-        var (file, arguments, workDirectory) = ParseBatCommand(step.Command);
+        var bat = ParseBatCommand(step.Command);
         var timeoutMs = int.TryParse(step.TimeoutMs, out var parsed) && parsed > 0
             ? parsed
             : BatRunner.DefaultTimeoutMs;
+        // Bat 的 PASS 条件取脚本「评判标准(等值)」，未配置时沿用机种配置
+        var successCodes = string.IsNullOrWhiteSpace(step.Equal)
+            ? _batSuccessExitCodes
+            : step.Equal;
 
         _stepCommitted = false;
         _batRunning = true;
@@ -574,10 +582,13 @@ public sealed class SingleStationTestController : IDisposable
 
         var session = _session;
         var token = _batCts.Token;
-        var displayArgs = string.IsNullOrWhiteSpace(arguments) ? string.Empty : " " + arguments;
-        AddLog($"步骤 {index + 1} 调用批处理 {file}{displayArgs}（超时 {timeoutMs} ms）");
+        var displayArgs = string.IsNullOrWhiteSpace(bat.Arguments) ? string.Empty : " " + bat.Arguments;
+        AddLog($"步骤 {index + 1} 调用批处理 {bat.File}{displayArgs}（超时 {timeoutMs} ms，" +
+            $"成功退出码 {successCodes ?? "0"}）");
 
-        _ = RunBatAsync(index, step, session, file, arguments, workDirectory, timeoutMs, token);
+        _ = RunBatAsync(
+            index, step, session, bat.File, bat.Arguments, bat.WorkDirectory,
+            timeoutMs, successCodes, token);
     }
 
     private async Task RunBatAsync(
@@ -588,13 +599,15 @@ public sealed class SingleStationTestController : IDisposable
         string? arguments,
         string? workDirectory,
         int timeoutMs,
+        string? successExitCodes,
         CancellationToken token)
     {
         var stopwatch = Stopwatch.StartNew();
         BatResult result;
         try
         {
-            result = await BatRunner.RunAsync(file, arguments, workDirectory, timeoutMs, token)
+            result = await BatRunner.RunAsync(
+                    file, arguments, workDirectory, timeoutMs, token, successExitCodes)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -647,6 +660,13 @@ public sealed class SingleStationTestController : IDisposable
         _stepCommitted = true;
         if (!result.Passed && isPreOrMain)
         {
+            if (!StopOnNg)
+            {
+                AddLog($"步骤 {index + 1} 判定 NG，按设置继续执行后续步骤");
+                Changed?.Invoke();
+                return;
+            }
+
             if (TryMoveToPostSeq("Bat"))
             {
                 Changed?.Invoke();
@@ -731,6 +751,13 @@ public sealed class SingleStationTestController : IDisposable
         _stepCommitted = true;
         if (!result.Passed && isPreOrMain)
         {
+            if (!StopOnNg)
+            {
+                AddLog($"步骤 {index + 1} 判定 NG，按设置继续执行后续步骤");
+                Changed?.Invoke();
+                return;
+            }
+
             if (TryMoveToPostSeq("UDS"))
             {
                 Changed?.Invoke();
@@ -855,43 +882,6 @@ public sealed class SingleStationTestController : IDisposable
         _udsRunning = false;
     }
 
-    private string BuildMeasured(TestStepVm step, bool passed)
-    {
-        if (!string.IsNullOrEmpty(step.Equal))
-        {
-            return passed ? step.Equal : $"≠{step.Equal}";
-        }
-
-        if (double.TryParse(step.Min, out var min) && double.TryParse(step.Max, out var max))
-        {
-            var value = passed
-                ? min + _random.NextDouble() * (max - min)
-                : max + Math.Max(0.01, (max - min) * 0.2);
-            return $"{value:F2}";
-        }
-
-        if (step.Kind == "Wait")
-        {
-            return passed ? "等待完成" : "超时";
-        }
-
-        return passed ? "OK" : "失败";
-    }
-
-    private void UpdateParameter(TestStepVm step, bool passed)
-    {
-        switch (step.ParamName.ToLowerInvariant())
-        {
-            case "voltage":
-                Parameters[1].Update($"{5.0 + (_random.NextDouble() - 0.5) * 0.2:F2}", passed);
-                break;
-
-            case "current":
-                Parameters[2].Update($"{0.5 + _random.NextDouble() * 0.4:F2}", passed);
-                break;
-        }
-    }
-
     private void FinishSession()
     {
         _timer.Stop();
@@ -904,11 +894,21 @@ public sealed class SingleStationTestController : IDisposable
         _session++;
         _current = -1;
 
+        // 只统计真实执行过的步骤（PASS/NG）；全部跳过时不能误判为 PASS
+        var executed = Steps.Count(step => !step.IsGroup
+            && (step.Result == "PASS" || step.Result == "NG"));
+
         if (_hasNg)
         {
             NgCount++;
             Verdict = "NG";
             StateText = "测试完成（NG）";
+        }
+        else if (executed == 0)
+        {
+            Verdict = "--";
+            StateText = "测试完成（无执行步骤）";
+            AddLog("没有可执行的真实硬件步骤，本件不计 PASS");
         }
         else
         {

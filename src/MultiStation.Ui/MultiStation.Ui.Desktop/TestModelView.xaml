@@ -233,6 +233,10 @@
                                         Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch" Margin="0,0,0,10" />
                                 <Button x:Name="BtnTestNext" Content="下一步" Click="OnTestNext"
                                         Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch" />
+                                <CheckBox x:Name="ChkStopOnNg" Content="NG 后停止测试" IsChecked="True"
+                                          Margin="2,12,0,0" />
+                                <CheckBox x:Name="ChkLogRawFrames" Content="记录原始报文" IsChecked="True"
+                                          Margin="2,8,0,0" />
                             </StackPanel>
 
                             <!-- 工位运行日志 -->

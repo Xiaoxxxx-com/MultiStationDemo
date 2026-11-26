@@ -1,3 +1,4 @@
+using System.IO;
 using System.IO.Ports;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -219,13 +220,14 @@ internal static class InstrumentTests
             $"custom={powerCustom.BaudRate},{powerCustom.DataBits},{powerCustom.Parity},{powerCustom.StopBits} " +
             $"invalid={powerInvalid}");
 
-        // INS-15 IT6322A 输出通道：CH1/CH2 可选，其他通道拒绝
+        // INS-15 IT6322B/IT6332B 输出通道：CH1~CH3 可选，其他通道拒绝；命令以 CR+LF 结束
         var channel1 = It6322aPowerSupply.ChannelCommand(1);
         var channel2 = It6322aPowerSupply.ChannelCommand(2);
+        var channel3 = It6322aPowerSupply.ChannelCommand(3);
         var channelInvalid = false;
         try
         {
-            It6322aPowerSupply.ChannelCommand(3);
+            It6322aPowerSupply.ChannelCommand(4);
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -233,10 +235,48 @@ internal static class InstrumentTests
         }
 
         Program.Check("INS-15",
-            channel1 == "INST CH1" && channel2 == "INST CH2" && channelInvalid,
-            $"ch1={channel1} ch2={channel2} invalid={channelInvalid}");
+            channel1 == "INST 1" && channel2 == "INST 2" && channel3 == "INST 3"
+                && channelInvalid && It6322aPowerSupply.Terminator == "\r\n",
+            $"ch1={channel1} ch2={channel2} ch3={channel3} invalid={channelInvalid} " +
+            $"terminator={(int)It6322aPowerSupply.Terminator[0]:X2},{(int)It6322aPowerSupply.Terminator[1]:X2}");
+
+        // INS-16 原始报文记录：开启后按 TX/RX + 设备/通道 + ID + 数据格式落盘
+        MultiStation.Instruments.Logging.RawFrameLogger.Enabled = true;
+        MultiStation.Instruments.Logging.RawFrameLogger.Mark("单元测试标记");
+        MultiStation.Instruments.Logging.RawFrameLogger.Write(
+            received: false, deviceIndex: 0, channelIndex: 1,
+            new CanFrame(0x18DAF1A2, [0x02, 0x10, 0x03], ExtendedId: true),
+            canFd: false);
+        var rawFile = MultiStation.Instruments.Logging.RawFrameLogger.CurrentFile;
+        var rawText = ReadShared(rawFile);
+        Program.Check("INS-16",
+            rawFile is not null
+                && rawText.Contains("单元测试标记", StringComparison.Ordinal)
+                && rawText.Contains("TX DEV0 CH1 CAN 0x18DAF1A2 [3] 02 10 03", StringComparison.Ordinal),
+            $"file={rawFile}");
+        MultiStation.Instruments.Logging.RawFrameLogger.Enabled = false;
 
         ecu.DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+
+    /// <summary>允许其他进程同时写入的读取方式，避免现场程序正在运行时测试被文件锁打断。</summary>
+    private static string ReadShared(string? path)
+    {
+        if (path is null || !File.Exists(path))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+        catch (IOException)
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>真实设备连通性检查（需显式传 --hardware）：只做连接与只读回读，不下发输出与报文。</summary>

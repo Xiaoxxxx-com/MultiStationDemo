@@ -7,6 +7,23 @@
     <ProjectReference Include="..\..\MultiStation.Platform\MultiStation.Platform.Simulation\MultiStation.Platform.Simulation.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 烧录脚本随程序一起输出/发布，换电脑后无需手工拷贝 Script 目录 -->
+    <Content Include="..\..\..\Script\NP12.xlsx" Link="Script\NP12.xlsx"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\..\Script\NP13.xlsx" Link="Script\NP13.xlsx"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- 批处理脚本 -->
+    <Content Include="..\..\..\Script\Bat\**\*" Link="Script\Bat\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <!-- AutoLoader 刷写工具及其配置、刷写文件，发布时整体带上 -->
+    <Content Include="..\..\..\Flash\**\*" Link="Flash\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <!-- ZLG 的 zlgcan.dll 放在程序根目录，DllImport 才能直接加载 -->
+    <Content Include="..\..\..\Flash\NP12\zlgcan.dll" Link="zlgcan.dll"
+             CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -17,6 +34,8 @@
     <PlatformTarget>x86</PlatformTarget>
     <!-- LibraryImport 源生成器需要 unsafe 代码支持 -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- 按显示器 DPI 感知，保证 1080P 高缩放下界面清晰不变形 -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿﻿using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -63,36 +63,10 @@ public partial class App : Application
                 return;
             }
 
-            // 权限登入：冒烟模式跳过交互；调试屏蔽持久化仍在有效期时免登录进入
-            var bypassRestored = PermissionBypass.Restore();
-            if (isSmoke)
-            {
-                SessionContext.Current = new UserSession("smoke", UserRole.Admin, DateTimeOffset.Now);
-            }
-            else if (bypassRestored)
-            {
-                SessionContext.Current = new UserSession(
-                    SessionContext.DebugBypassUserName, UserRole.Admin, DateTimeOffset.Now);
-            }
-            else if (!AuthService.HasAnyUser())
-            {
-                // 首次运行：由用户自行注册管理员账号，代码中不预置任何账号
-                var register = new RegisterAdminWindow();
-                if (register.ShowDialog() != true)
-                {
-                    Shutdown();
-                    return;
-                }
-            }
-            else
-            {
-                var login = new LoginWindow();
-                if (login.ShowDialog() != true)
-                {
-                    Shutdown();
-                    return;
-                }
-            }
+            // 登录密码已屏蔽：启动后直接以管理员身份进入，不再弹出登录/注册窗口
+            SessionContext.Current = isSmoke
+                ? new UserSession("smoke", UserRole.Admin, DateTimeOffset.Now)
+                : new UserSession("操作员", UserRole.Admin, DateTimeOffset.Now);
 
             // 每次完成登录后固定先进入 NP12；手动切换记录不影响下次登录首页
             var models = ModelStore.Load();

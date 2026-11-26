@@ -1,4 +1,5 @@
 using System.IO;
+using MultiStation.Platform.Core.Execution;
 using MultiStation.Platform.Core.Production;
 using MultiStation.Ui.Desktop;
 
@@ -69,10 +70,12 @@ internal static class ModelTests
                     && np13.CcuResponseId == np12.CcuResponseId
                     && !np12.IsCanFd && !np13.IsCanFd
                     && np12.BaudRate == 500_000 && np13.BaudRate == 500_000
-                    && Path.GetFileName(np12.FlashSequencePath) == "NP12.csv"
+                    && Path.GetFileName(np12.FlashSequencePath) == "NP12.xlsx"
+                    && Path.GetFileName(Path.GetDirectoryName(np12.FlashSequencePath)!) == "Script"
                     && Path.GetFileName(np12.FactoryDataPath) == "FlashConfig.ini"
                     && Path.GetFileName(np12.FlashBatchPath) == "NP12.bat"
-                    && Path.GetFileName(np13.FlashSequencePath) == "NP13.csv"
+                    && Path.GetFileName(np13.FlashSequencePath) == "NP13.xlsx"
+                    && Path.GetFileName(Path.GetDirectoryName(np13.FlashSequencePath)!) == "Script"
                     && Path.GetFileName(np13.FactoryDataPath) == "FlashConfig.ini"
                     && Path.GetFileName(np13.FlashBatchPath) == "NP13.bat",
                 $"NP12/NP13 main=0x{np12.RequestId:X8}/0x{np12.ResponseId:X8} " +
@@ -83,7 +86,9 @@ internal static class ModelTests
                     && np12.PowerCurrentLimit > 0 && np13.PowerCurrentLimit > 0
                     && string.IsNullOrEmpty(np12.PowerSupplyPort)
                     && np12.PowerSerialSettings == "9600,8,N,1"
-                    && np12.PowerChannel == 1 && np13.PowerChannel == 1,
+                    && np12.PowerChannel == 1 && np13.PowerChannel == 1
+                    && np12.BatSuccessExitCodes == "0,2"
+                    && np13.BatSuccessExitCodes == "0,2",
                 $"np12={np12.PowerVoltage}V np13={np13.PowerVoltage}V " +
                 $"current={np12.PowerCurrentLimit}A port={np12.PowerSupplyPort ?? "-"} " +
                 $"serial={np12.PowerSerialSettings} channel=CH{np12.PowerChannel}");
@@ -93,6 +98,30 @@ internal static class ModelTests
                     && np12.ReportFileNamePattern == "{Model}_{SN}_{DateTime}.txt"
                     && np13.ReportFileNamePattern == np12.ReportFileNamePattern,
                 $"reportDir={np12.ReportDirectory} pattern={np12.ReportFileNamePattern}");
+
+            // MB-10 首次在新电脑运行：默认脚本路径必须落到实际存在的 Script 文件
+            var freshDirectory = Path.Combine(
+                Path.GetTempPath(), "multistation-fresh-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var fresh = new ModelProfileStore(freshDirectory).Load();
+                var freshNp12 = fresh.Single(m => m.Name == "NP12");
+                var freshNp13 = fresh.Single(m => m.Name == "NP13");
+                Program.Check("MB-10",
+                    File.Exists(freshNp12.FlashSequencePath) && File.Exists(freshNp13.FlashSequencePath),
+                    $"np12={freshNp12.FlashSequencePath} np13={freshNp13.FlashSequencePath}");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(freshDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // 临时目录清理失败不影响测试结论
+                }
+            }
 
             Program.Check("MB-04",
                 App.SelectRelativeModel(defaults, "NP12", 1).Name == "NP13"
@@ -104,6 +133,100 @@ internal static class ModelTests
                     && App.SelectRelativeModel(models, "ECU 烧录", 1).Name == "MTCU-A"
                     && App.SelectRelativeModel(defaults, "已删除机种", 1).Name == "NP12",
                 "NP12 首页、NP13 双向导航、首尾循环、自定义机种及缺失回退");
+
+            // MB-07 配置迁移到其他电脑：旧用户桌面的 E3Flash 路径自动重定位到当前桌面
+            var staleRoot = @"C:\Users\80040\Desktop\E3Flash";
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var portableDirectory = Path.Combine(
+                Path.GetTempPath(), "multistation-portable-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var portableStore = new ModelProfileStore(portableDirectory);
+                portableStore.Save(
+                [
+                    new ModelProfile
+                    {
+                        Name = "迁移烧录",
+                        Kind = ModelKind.Flash,
+                        FlashSequencePath = Path.Combine(staleRoot, "Config", "stale-model.csv"),
+                        FlashBatchPath = Path.Combine(staleRoot, "stale-model.bat"),
+                        ReportDirectory = Path.Combine(staleRoot, "Report"),
+                    },
+                ]);
+                var migrated = new ModelProfileStore(portableDirectory).Load()
+                    .Single(m => m.Name == "迁移烧录");
+                Program.Check("MB-07",
+                    migrated.FlashSequencePath
+                        == Path.Combine(desktop, "E3Flash", "Config", "stale-model.csv")
+                        && migrated.FlashBatchPath == Path.Combine(desktop, "E3Flash", "stale-model.bat")
+                        && migrated.ReportDirectory == Path.Combine(desktop, "E3Flash", "Report"),
+                    $"sequence={migrated.FlashSequencePath} batch={migrated.FlashBatchPath} " +
+                    $"report={migrated.ReportDirectory}");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(portableDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // 临时目录清理失败不影响测试结论
+                }
+            }
+
+            // MB-09 旧配置 NP12/NP13 成功退出码为 0 时一次性升级为 0,2
+            var legacyDirectory = Path.Combine(
+                Path.GetTempPath(), "multistation-batexit-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                new ModelProfileStore(legacyDirectory).Save(
+                [
+                    new ModelProfile
+                    {
+                        Name = "NP12",
+                        Kind = ModelKind.Flash,
+                        FlashSequencePath = Path.Combine(legacyDirectory, "NP12.csv"),
+                        BatSuccessExitCodes = "0",
+                    },
+                    new ModelProfile
+                    {
+                        Name = "NP13",
+                        Kind = ModelKind.Flash,
+                        FlashSequencePath = Path.Combine(legacyDirectory, "NP13.csv"),
+                        BatSuccessExitCodes = "0",
+                    },
+                ]);
+                var upgraded = new ModelProfileStore(legacyDirectory).Load();
+                Program.Check("MB-09",
+                    upgraded.Single(m => m.Name == "NP12").BatSuccessExitCodes == "0,2"
+                        && upgraded.Single(m => m.Name == "NP13").BatSuccessExitCodes == "0,2",
+                    "旧配置 0 已升级为 0,2");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(legacyDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // 临时目录清理失败不影响测试结论
+                }
+            }
+
+            // MB-08 Bat 成功退出码：AutoLoader 刷写成功后返回 2 时按成功处理
+            var exitBat = Path.Combine(directory, "exit2.bat");
+            File.WriteAllText(exitBat, "@echo off\r\nexit /b 2\r\n");
+            var accepted = BatRunner.RunAsync(
+                    exitBat, null, null, 10_000, CancellationToken.None, "0,2")
+                .GetAwaiter().GetResult();
+            var strict = BatRunner.RunAsync(
+                    exitBat, null, null, 10_000, CancellationToken.None, "0")
+                .GetAwaiter().GetResult();
+            Program.Check("MB-08",
+                accepted.Passed && accepted.ExitCode == 2 && !strict.Passed,
+                $"accepted={accepted.Passed}/{accepted.Message} strict={strict.Passed}/{strict.Message}");
 
             // MB-02 ECU 烧录机种使用独立测试序列（与通用序列不同，全部来自 UDS 烧录流程）
             var flashRows = FlashSequenceData.Rows;

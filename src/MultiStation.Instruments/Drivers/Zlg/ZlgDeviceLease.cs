@@ -38,20 +38,58 @@ internal sealed class ZlgDeviceLease : IDisposable
                 return existing;
             }
 
-            var api = ZlgCanApi.Load();
-            var handle = api.OpenDevice(deviceType, (uint)deviceIndex, 0);
-            if (handle == 0)
+            var tried = new List<string>();
+            // 先试程序自带的那份；不匹配当前驱动时回退到 ZCANPRO 安装目录里的库
+            var candidates = new List<string?> { null };
+            candidates.AddRange(ZlgCanApi.AlternatePaths().Select(path => (string?)path));
+
+            foreach (var candidate in candidates)
             {
-                api.Dispose();
-                throw new IOException(
-                    $"打开 {ZlgCanApi.DescribeDevice(deviceType)} 失败（设备序号 {deviceIndex}），" +
-                    "请确认设备型号配置、设备已连接且未被其他软件占用");
+                ZlgCanApi api;
+                try
+                {
+                    api = ZlgCanApi.Load(candidate);
+                }
+                catch (Exception ex) when (ex is FileNotFoundException or DllNotFoundException
+                    or BadImageFormatException)
+                {
+                    continue;
+                }
+
+                var handle = TryOpen(api, deviceType, deviceIndex, candidate is null ? 2 : 1);
+                if (handle == 0)
+                {
+                    tried.Add(api.LoadedPath);
+                    api.Dispose();
+                    continue;
+                }
+
+                var lease = new ZlgDeviceLease(key, api, handle);
+                Leases[key] = lease;
+                return lease;
             }
 
-            var lease = new ZlgDeviceLease(key, api, handle);
-            Leases[key] = lease;
-            return lease;
+            throw new IOException(
+                $"打开 {ZlgCanApi.DescribeDevice(deviceType)} 失败（设备序号 {deviceIndex}），" +
+                "请确认设备型号配置、设备已连接，且没有 ZCANPRO 或残留程序占用该设备。" +
+                $"已尝试的驱动库：{(tried.Count == 0 ? "未找到 zlgcan.dll" : string.Join("；", tried))}");
         }
+    }
+
+    private static uint TryOpen(ZlgCanApi api, uint deviceType, int deviceIndex, int attempts)
+    {
+        uint handle = 0;
+        for (var i = 0; i < attempts && handle == 0; i++)
+        {
+            if (i > 0)
+            {
+                Thread.Sleep(200);
+            }
+
+            handle = api.OpenDevice(deviceType, (uint)deviceIndex, 0);
+        }
+
+        return handle;
     }
 
     /// <summary>释放一个通道引用；引用归零时关闭设备并卸载驱动。</summary>

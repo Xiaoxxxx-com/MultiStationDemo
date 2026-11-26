@@ -333,6 +333,20 @@ public partial class MainWindow : Window, IDisposable
         await _modelView.ShutdownAsync();
     }
 
+    /// <summary>
+    /// 适配 1080P 及高缩放屏幕：窗口尺寸限制在可用工作区内，
+    /// 避免 125%/150% 缩放下窗口超出屏幕造成内容挤压或裁切。
+    /// </summary>
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        var workArea = SystemParameters.WorkArea;
+        MinWidth = Math.Min(MinWidth, workArea.Width);
+        MinHeight = Math.Min(MinHeight, workArea.Height);
+        // 还原窗口时的尺寸也不超过工作区，避免高缩放屏幕下超出屏幕
+        Width = Math.Min(Width, workArea.Width);
+        Height = Math.Min(Height, workArea.Height);
+    }
+
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_closing)

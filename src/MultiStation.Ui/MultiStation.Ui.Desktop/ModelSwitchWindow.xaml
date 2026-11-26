@@ -97,6 +97,9 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="烧录参数" FontWeight="SemiBold"
@@ -168,7 +171,7 @@
                         <TextBlock Grid.Row="14" Text="电源串口" VerticalAlignment="Center" Margin="0,0,8,10" />
                         <TextBox x:Name="TxtPowerPort" Grid.Row="14" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10"
-                                 ToolTip="IT6322A 串口名，如 COM3；留空则烧录前不上电" />
+                                 ToolTip="IT6322B/IT6332B 串口名，如 COM3；留空则烧录前不上电" />
 
                         <TextBlock Grid.Row="15" Text="电源电压(V)" VerticalAlignment="Center" Margin="0,0,8,10" />
                         <TextBox x:Name="TxtPowerVoltage" Grid.Row="15" Grid.Column="1" Height="30" Padding="6,4"
@@ -178,7 +181,7 @@
                         <TextBlock Grid.Row="16" Text="电源限流(A)" VerticalAlignment="Center" Margin="0,0,8,10" />
                         <TextBox x:Name="TxtPowerCurrent" Grid.Row="16" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10"
-                                 ToolTip="IT6322A CH1 限流，默认 3A" />
+                                 ToolTip="电源输出通道限流，默认 3A" />
 
                         <TextBlock Grid.Row="17" Text="串口参数" VerticalAlignment="Center" Margin="0,0,8,10" />
                         <TextBox x:Name="TxtPowerSerial" Grid.Row="17" Grid.Column="1" Height="30" Padding="6,4"
@@ -208,6 +211,21 @@
                         <TextBox x:Name="TxtReportFileName" Grid.Row="20" Grid.Column="1" Height="30" Padding="6,4"
                                  VerticalContentAlignment="Center" Margin="0,0,0,10"
                                  ToolTip="{}{Model} {SN} {CarrierID} {ShellCode} {Verdict} {Date} {Time} {DateTime}，如 {Model}_{SN}_{DateTime}.txt" />
+
+                        <TextBlock Grid.Row="21" Text="Bat 成功退出码" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtBatSuccessCodes" Grid.Row="21" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="逗号分隔，如 0,2；AutoLoader 刷写成功后返回 2 时填 0,2" />
+
+                        <TextBlock Grid.Row="22" Text="诊断间隔(ms)" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtUdsInterval" Grid.Row="22" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="相邻两条 UDS 请求之间的最小间隔，默认 20ms；0 表示不限制" />
+
+                        <TextBlock Grid.Row="23" Text="诊断重试次数" VerticalAlignment="Center" Margin="0,0,8,10" />
+                        <TextBox x:Name="TxtUdsRetry" Grid.Row="23" Grid.Column="1" Height="30" Padding="6,4"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 ToolTip="脚本「重试」列为 0 时使用该次数；0 表示不重试" />
                     </Grid>
 
                     <TextBlock x:Name="TxtError" Foreground="#DC2626" TextWrapping="Wrap" Margin="0,8,0,0" />

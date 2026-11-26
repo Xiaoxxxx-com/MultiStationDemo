@@ -187,6 +187,10 @@
                                 Style="{StaticResource SmallGhostButton}" />
                         <Button x:Name="BtnFlashNext" Content="下一步" Click="OnNext"
                                 Style="{StaticResource SmallGhostButton}" />
+                        <CheckBox x:Name="ChkStopOnNg" Content="NG 后停止测试" IsChecked="True"
+                                  VerticalAlignment="Center" Margin="12,0,0,0" />
+                        <CheckBox x:Name="ChkLogRawFrames" Content="记录原始报文" IsChecked="True"
+                                  VerticalAlignment="Center" Margin="12,0,0,0" />
                     </StackPanel>
                     <TextBlock x:Name="TxtFlashStatus" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Center"
                                Foreground="{StaticResource MutedBrush}" FontSize="12" />

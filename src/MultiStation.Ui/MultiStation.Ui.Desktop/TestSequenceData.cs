@@ -81,7 +81,7 @@ public static class TestSequenceData
         new("MainSeq", "27", "MAIN_PLC_ESTOP_INPUT", "PLC 交互", "Test", "Num", "DataBase", "", "", "0", "plc_inovance_modbus", "COM=MODBUS_TCP,POINT=D0.5", "2000", "1", "", "", "T", "T", "PLC DI 急停输入（BOOL，D0.5，期望 0=未按下）"),
         new("MainSeq", "28", "MAIN_PLC_ALARM", "PLC 交互", "Test", "Num", "DataBase", "", "", "0", "plc_inovance_modbus", "COM=MODBUS_TCP,POINT=R101.8", "2000", "1", "", "", "T", "T", "PLC 系统报警中（BOOL，R101.8，期望 0=无报警）"),
         new("MainSeq", "29", "", "外部脚本", "标题", "", "外部脚本", "", "", "", "", "", "", "", "", "", "T", "T", ""),
-        new("MainSeq", "30", "MAIN_BAT_START_QQ", "外部脚本", "Bat", "Num", "启动 QQ", "", "", "", "bat", "FILE=Script\\Bat\\StartQQ.bat", "10000", "1", "", "", "T", "T", "调用 Script\\Bat\\StartQQ.bat 启动 QQ（优先 D:\\QQ\\QQ.exe，回退常见安装路径）：退出码 0 判 PASS，非 0 或超时判 NG；stdout 前 8 行写入工位日志"),
+        new("MainSeq", "30", "MAIN_BAT_START_QQ", "外部脚本", "Bat", "Num", "启动 QQ", "", "", "", "bat", "FILE=Script\\Bat\\StartQQ.bat", "10000", "1", "", "", "T", "T", "调用 Script\\Bat\\StartQQ.bat 启动 QQ（优先 D:\\QQ\\QQ.exe，回退常见安装路径）：成功退出码取「评判标准(等值)」或机种配置；超时判 NG；stdout 前 8 行写入工位日志"),
         new("PostSeq", "1", "", "电源测试", "标题", "", "电源测试", "", "", "", "", "", "", "", "", "", "T", "T", ""),
         new("PostSeq", "2", "POST_PSW_OUT_OFF", "电源测试", "Action", "Num", "关闭电源输出", "", "", "", "power_gwinstek_psw_visa", "COM=SCPI,OUTPUT=OFF", "2000", "1", "PostDelay", "200", "T", "T", "每件后段：先关输出（安全底线）"),
         new("PostSeq", "3", "POST_PSW_INIT", "电源测试", "Action", "Num", "初始化电源", "", "", "", "power_gwinstek_psw_visa", "COM=SCPI,CTRL=INIT", "5000", "1", "", "", "T", "T", "PSW 复位 *RST/*CLS 并关闭输出，回到可复用初始态"),
